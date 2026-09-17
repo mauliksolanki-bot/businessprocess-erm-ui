@@ -443,6 +443,102 @@ export type SelfDashboard = {
   currentProjects: SelfProjectAssignment[];
 };
 
+export type AttendanceAssignment = {
+  allocationId: number;
+  projectRequestId: number;
+  projectName: string;
+  projectCode: string;
+  allocationType: string;
+  allocationPercent: number;
+  startDate: string;
+  endDate: string;
+};
+
+export type AttendanceDay = {
+  workDate: string;
+  dayLabel: string;
+  weekend: boolean;
+  leaveDay: boolean;
+  leaveLabel: string | null;
+  billableHours: number;
+  nonBillableHours: number;
+  billableProjectAllocationId: number | null;
+  billableProjectName: string | null;
+  billableProjectCode: string | null;
+  nonBillableProjectAllocationId: number | null;
+  nonBillableProjectName: string | null;
+  nonBillableProjectCode: string | null;
+  editable: boolean;
+};
+
+export type AttendanceTimesheet = {
+  id: number;
+  employeeUserId: number;
+  employeeUsername: string;
+  employeeFullName: string;
+  weekStartDate: string;
+  weekEndDate: string;
+  approverManagerUserId: number | null;
+  approverManagerUsername: string | null;
+  approverManagerFullName: string | null;
+  timesheetStatus: string;
+  approvalRequired: boolean;
+  submittedAt: string | null;
+  approvedAt: string | null;
+  rejectedAt: string | null;
+  approverComment: string | null;
+  approvalReset: boolean;
+  days: AttendanceDay[];
+};
+
+export type AttendanceApprovalItem = {
+  id: number;
+  employeeUserId: number;
+  employeeUsername: string;
+  employeeFullName: string;
+  weekStartDate: string;
+  weekEndDate: string;
+  billableHours: number;
+  nonBillableHours: number;
+  timesheetStatus: string;
+  submittedAt: string | null;
+  updatedAt: string;
+};
+
+export type AttendanceWeek = {
+  weekStartDate: string;
+  weekEndDate: string;
+  editableUntil: string;
+  editable: boolean;
+  hasBillableAssignments: boolean;
+  hasReportees: boolean;
+  timesheet: AttendanceTimesheet | null;
+  days: AttendanceDay[];
+  billableAssignments: AttendanceAssignment[];
+  nonBillableAssignments: AttendanceAssignment[];
+  pendingApprovals: AttendanceApprovalItem[];
+};
+
+export type AttendanceDayUpsert = {
+  workDate: string;
+  billableHours: number;
+  nonBillableHours: number;
+  billableProjectAllocationId: number | null;
+  nonBillableProjectAllocationId: number | null;
+};
+
+export type AttendanceUpsertRequest = {
+  weekStartDate: string;
+  days: AttendanceDayUpsert[];
+};
+
+export type AttendanceActionDecision = "APPROVE" | "REJECT";
+
+export type AttendanceActionRequest = {
+  decision: AttendanceActionDecision;
+  comment: string;
+};
+
 export type LeavePolicy = {
   id: number;
   leaveCategory: string;
@@ -663,6 +759,64 @@ export async function getSelfDashboard(accessToken: string) {
       Authorization: "Bearer " + accessToken,
     },
     cache: "no-store",
+  });
+}
+
+export async function getAttendanceWeek(accessToken: string, weekStartDate?: string) {
+  const params = weekStartDate ? `?weekStartDate=${encodeURIComponent(weekStartDate)}` : "";
+  return request<AttendanceWeek>(`/api/attendance/weeks/current${params}`, {
+    headers: {
+      Authorization: "Bearer " + accessToken,
+    },
+    cache: "no-store",
+  });
+}
+
+export async function saveAttendanceTimesheet(accessToken: string, payload: AttendanceUpsertRequest) {
+  return request<AttendanceWeek>("/api/attendance/timesheets/save", {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + accessToken,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function submitAttendanceTimesheet(accessToken: string, payload: AttendanceUpsertRequest) {
+  return request<AttendanceWeek>("/api/attendance/timesheets/submit", {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + accessToken,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getAttendanceApproverVisibility(accessToken: string) {
+  return request<{ hasReportees: boolean }>("/api/attendance/approver-visibility", {
+    headers: {
+      Authorization: "Bearer " + accessToken,
+    },
+    cache: "no-store",
+  });
+}
+
+export async function getAttendanceApprovals(accessToken: string) {
+  return request<AttendanceApprovalItem[]>("/api/attendance/approvals", {
+    headers: {
+      Authorization: "Bearer " + accessToken,
+    },
+    cache: "no-store",
+  });
+}
+
+export async function actionAttendanceTimesheet(accessToken: string, timesheetId: number, payload: AttendanceActionRequest) {
+  return request<AttendanceWeek>(`/api/attendance/timesheets/${timesheetId}/actions`, {
+    method: "PATCH",
+    headers: {
+      Authorization: "Bearer " + accessToken,
+    },
+    body: JSON.stringify(payload),
   });
 }
 
