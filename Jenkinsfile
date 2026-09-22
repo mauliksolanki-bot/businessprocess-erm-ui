@@ -43,7 +43,10 @@ pipeline {
                         ./ "$STAGING_DIR"/
                     sudo /usr/bin/rsync -a --delete "$STAGING_DIR"/ "$APP_SRC_DIR"/
                     sudo /bin/chown -R ermui:ermui "$APP_SRC_DIR"
-                    sudo -u ermui bash -c "cd '$APP_SRC_DIR' && unset NODE_ENV && npm ci --include=dev"
+                    sudo -u ermui bash -c "rm -rf '$APP_SRC_DIR/.next' '$APP_SRC_DIR/node_modules'"
+                    sudo -u ermui bash -c "cd '$APP_SRC_DIR' && unset NODE_ENV NPM_CONFIG_PRODUCTION npm_config_production && npm ci --include=dev"
+                    sudo -u ermui bash -c "cd '$APP_SRC_DIR' && node -e \"require.resolve('@tailwindcss/postcss')\"" || \
+                        sudo -u ermui bash -c "cd '$APP_SRC_DIR' && unset NODE_ENV && npm install --no-save @tailwindcss/postcss tailwindcss"
                     sudo -u ermui bash -c "cd '$APP_SRC_DIR' && export \$(grep -E '^NEXT_PUBLIC_' /etc/ermui/ermui.env | xargs -d '\n') && npm run build"
                     rm -rf "$STAGING_DIR"
                     sudo systemctl restart "$SERVICE_NAME"
