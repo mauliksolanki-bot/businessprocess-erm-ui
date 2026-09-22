@@ -4,6 +4,7 @@ pipeline {
     options {
         timestamps()
         disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10', artifactNumToKeepStr: '5'))
     }
 
     environment {
@@ -45,8 +46,9 @@ pipeline {
                     sudo /bin/chown -R ermui:ermui "$APP_SRC_DIR"
                     sudo -u ermui bash -c "rm -rf '$APP_SRC_DIR/.next' '$APP_SRC_DIR/node_modules'"
                     sudo -u ermui bash -c "cd '$APP_SRC_DIR' && unset NODE_ENV NPM_CONFIG_PRODUCTION npm_config_production && npm ci --include=dev"
-                    sudo -u ermui bash -c "cd '$APP_SRC_DIR' && node -e \"require.resolve('@tailwindcss/postcss')\"" || \
+                    if [ ! -d "$APP_SRC_DIR/node_modules/@tailwindcss/postcss" ]; then
                         sudo -u ermui bash -c "cd '$APP_SRC_DIR' && unset NODE_ENV && npm install --no-save @tailwindcss/postcss tailwindcss"
+                    fi
                     sudo -u ermui bash -c "cd '$APP_SRC_DIR' && export \$(grep -E '^NEXT_PUBLIC_' /etc/ermui/ermui.env | xargs -d '\n') && npm run build"
                     rm -rf "$STAGING_DIR"
                     sudo systemctl restart "$SERVICE_NAME"
@@ -75,6 +77,12 @@ pipeline {
     }
 
     post {
+        always {
+            // node_modules/.next inside the Jenkins workspace are only needed
+            // transiently for the "Install & Build" validation step; remove
+            // them so old build workspaces don't accumulate disk usage.
+            sh 'rm -rf node_modules .next "$STAGING_DIR" || true'
+        }
         success {
             echo 'UI build & deploy succeeded.'
         }
