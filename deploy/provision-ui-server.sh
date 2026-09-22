@@ -155,7 +155,7 @@ jenkins ALL=(root) NOPASSWD: /bin/systemctl restart ${SERVICE_NAME}
 jenkins ALL=(root) NOPASSWD: /bin/systemctl status ${SERVICE_NAME}
 jenkins ALL=(root) NOPASSWD: /bin/systemctl is-active ${SERVICE_NAME}
 jenkins ALL=(root) NOPASSWD: /bin/chown -R ${APP_USER}\:${APP_USER} ${APP_SRC_DIR}
-jenkins ALL=(root) NOPASSWD: /usr/bin/rsync -a --delete /tmp/ermui-deploy/ ${APP_SRC_DIR}/
+jenkins ALL=(root) NOPASSWD: /usr/bin/rsync -a --delete /tmp/ermui-jenkins-build/ ${APP_SRC_DIR}/
 jenkins ALL=(${APP_USER}) NOPASSWD: ALL
 EOF
 chmod 440 /etc/sudoers.d/jenkins-ermui
