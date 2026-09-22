@@ -88,11 +88,24 @@ else
   su -s /bin/bash "${APP_USER}" -c "git clone --branch '${REPO_BRANCH}' '${REPO_URL}' '${APP_SRC_DIR}'"
 fi
 
-log "Installing dependencies (npm ci --include=dev, forced so devDependencies like @tailwindcss/postcss are always installed regardless of ambient NODE_ENV/npm config)"
-su -s /bin/bash "${APP_USER}" -c "cd '${APP_SRC_DIR}' && unset NODE_ENV && npm ci --include=dev"
+log "Removing any stale .next build cache and node_modules from previous runs"
+rm -rf "${APP_SRC_DIR}/.next" "${APP_SRC_DIR}/node_modules"
 
-if [[ ! -d "${APP_SRC_DIR}/node_modules/@tailwindcss/postcss" ]]; then
-  warn "@tailwindcss/postcss still missing after npm ci - installing it explicitly as a fallback"
+log "Installing dependencies (npm ci --include=dev, forced so devDependencies like @tailwindcss/postcss are always installed regardless of ambient NODE_ENV/npm config)"
+su -s /bin/bash "${APP_USER}" -c "
+  cd '${APP_SRC_DIR}'
+  unset NODE_ENV NPM_CONFIG_PRODUCTION npm_config_production
+  npm config delete production >/dev/null 2>&1 || true
+  npm config delete omit >/dev/null 2>&1 || true
+  echo '---- npm config (production/omit) ----'
+  npm config get production 2>/dev/null || true
+  npm config get omit 2>/dev/null || true
+  npm ci --include=dev
+"
+
+log "Verifying @tailwindcss/postcss is actually resolvable"
+if ! su -s /bin/bash "${APP_USER}" -c "cd '${APP_SRC_DIR}' && node -e \"require.resolve('@tailwindcss/postcss')\"" 2>/dev/null; then
+  warn "@tailwindcss/postcss not resolvable after npm ci - installing it explicitly as a fallback"
   su -s /bin/bash "${APP_USER}" -c "cd '${APP_SRC_DIR}' && unset NODE_ENV && npm install --no-save @tailwindcss/postcss tailwindcss"
 fi
 
