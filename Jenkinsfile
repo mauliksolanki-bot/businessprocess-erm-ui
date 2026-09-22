@@ -9,7 +9,7 @@ pipeline {
     environment {
         APP_SRC_DIR   = '/opt/ermui/src'
         SERVICE_NAME  = 'ermui'
-        STAGING_DIR   = '/tmp/ermui-deploy'
+        STAGING_DIR   = '/tmp/ermui-jenkins-build'
     }
 
     stages {
