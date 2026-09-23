@@ -49,7 +49,7 @@ pipeline {
                     if [ ! -d "$APP_SRC_DIR/node_modules/@tailwindcss/postcss" ]; then
                         sudo -u ermui bash -c "cd '$APP_SRC_DIR' && unset NODE_ENV && npm install --no-save @tailwindcss/postcss tailwindcss"
                     fi
-                    sudo -u ermui bash -c "cd '$APP_SRC_DIR' && export \$(grep -E '^NEXT_PUBLIC_' /etc/ermui/ermui.env | xargs -d '\n') && npm run build"
+                    sudo -u ermui bash -c "set -a; source /etc/ermui/ermui.env; set +a; cd '$APP_SRC_DIR'; unset NODE_ENV; env | grep '^NEXT_PUBLIC_' || true; npm run build"
                     rm -rf "$STAGING_DIR"
                     sudo systemctl restart "$SERVICE_NAME"
                 '''
