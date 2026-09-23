@@ -34,6 +34,11 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
+log "Freeing disk space (apt cache, old journal logs, stale tmp dirs)"
+apt-get clean || true
+journalctl --vacuum-time=3d >/dev/null 2>&1 || true
+rm -rf /tmp/ermui-deploy /tmp/ermui-jenkins-build /tmp/ermservice-deploy* 2>/dev/null || true
+
 # ---------------------------------------------------------------------------
 # 1. Node.js (via NodeSource) + git + curl
 # ---------------------------------------------------------------------------
@@ -104,13 +109,22 @@ su -s /bin/bash "${APP_USER}" -c "
 "
 
 log "Verifying @tailwindcss/postcss is actually resolvable"
-if ! su -s /bin/bash "${APP_USER}" -c "cd '${APP_SRC_DIR}' && node -e \"require.resolve('@tailwindcss/postcss')\"" 2>/dev/null; then
-  warn "@tailwindcss/postcss not resolvable after npm ci - installing it explicitly as a fallback"
+if [[ ! -d "${APP_SRC_DIR}/node_modules/@tailwindcss/postcss" ]]; then
+  warn "@tailwindcss/postcss not present after npm ci - installing it explicitly as a fallback"
   su -s /bin/bash "${APP_USER}" -c "cd '${APP_SRC_DIR}' && unset NODE_ENV && npm install --no-save @tailwindcss/postcss tailwindcss"
 fi
 
 log "Building the Next.js app (only NEXT_PUBLIC_* vars exported for build time)"
-su -s /bin/bash "${APP_USER}" -c "cd '${APP_SRC_DIR}' && export \$(grep -E '^NEXT_PUBLIC_' '${ENV_FILE}' | xargs -d '\n') && npm run build"
+su -s /bin/bash "${APP_USER}" -c "
+  set -a
+  source '${ENV_FILE}'
+  set +a
+  cd '${APP_SRC_DIR}'
+  unset NODE_ENV
+  echo '---- NEXT_PUBLIC_ vars visible to build ----'
+  env | grep '^NEXT_PUBLIC_' || true
+  npm run build
+"
 
 # ---------------------------------------------------------------------------
 # 5. systemd service
