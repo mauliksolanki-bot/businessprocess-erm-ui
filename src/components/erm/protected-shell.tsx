@@ -88,6 +88,11 @@ export function ProtectedShell({ children }: ProtectedShellProps) {
       reportingManagerRoleName: null,
       roles: session.roles,
       currentProjects: [],
+      personalEmailAddress: null,
+      phoneNumber: null,
+      educationQualification: null,
+      bankDetailsEditWindowOpen: false,
+      bankDetailsEditWindowMessage: null,
     });
   }, []);
 
@@ -109,7 +114,7 @@ export function ProtectedShell({ children }: ProtectedShellProps) {
         setUser(profile);
         setMenu(navMenu);
 
-        const approverRoles = ["hr head", "chro", "super admin"];
+        const approverRoles = ["hr head", "admin", "chro", "super admin", "ceo", "cto"];
         const projectApproverRoles = ["director", "cto", "super admin", "admin"];
         const userRoles = profile.roles.map((r) => r.toLowerCase());
         const isApprover = userRoles.some((r) => approverRoles.includes(r));
@@ -232,7 +237,7 @@ export function ProtectedShell({ children }: ProtectedShellProps) {
                     tone: "critical",
                   });
                 }
-                if (request.workflowStage === "Super Admin Approved") {
+                if (request.workflowStage === "Admin Approved" || request.workflowStage === "Additional Approval Approved") {
                   addNotification(nextNotifications, {
                     id: `onboarding-approved-${request.id}`,
                     title: "On-boarding request completed",

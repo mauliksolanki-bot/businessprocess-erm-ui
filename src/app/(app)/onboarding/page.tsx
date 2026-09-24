@@ -22,11 +22,19 @@ import {
   sendOnboardingReminder,
   searchUserMentions,
   takeOnboardingAction,
+  ONBOARDING_CLOSED_STAGES,
+  type OnboardingAdditionalApproverDesignation,
   type OnboardingDesignationOption,
   type OnboardingManagerOption,
   type OnboardingRequest,
 } from "@/lib/api";
 import { loadSession } from "@/lib/auth-storage";
+
+const ADDITIONAL_APPROVER_DESIGNATIONS: OnboardingAdditionalApproverDesignation[] = ["Super Admin", "CHRO", "CEO", "CTO"];
+
+function additionalApproverRoleName(designation: OnboardingAdditionalApproverDesignation) {
+  return designation.toLowerCase();
+}
 
 type RequestForm = {
   firstName: string;
@@ -77,10 +85,10 @@ function pendingWith(request: OnboardingRequest) {
     return "Head HR";
   }
   if (request.workflowStage === "Head HR Approved") {
-    return "CHRO";
+    return "Admin";
   }
-  if (request.workflowStage === "CHRO Approved") {
-    return "Super Admin";
+  if (request.workflowStage === "Additional Approval Pending") {
+    return request.additionalApproverDesignation ?? "Additional Approver";
   }
   if (request.workflowStage === "Refer Back") {
     return "Requester";
@@ -149,6 +157,7 @@ export default function OnboardingPage() {
   const [commentsRequest, setCommentsRequest] = useState<OnboardingRequest | null>(null);
   const [actionType, setActionType] = useState<"APPROVE" | "REJECT" | "REFER_BACK">("APPROVE");
   const [actionComment, setActionComment] = useState("");
+  const [additionalApproverChoice, setAdditionalApproverChoice] = useState<"" | "NONE" | OnboardingAdditionalApproverDesignation>("");
   const [isActioning, setIsActioning] = useState(false);
   const [isCommenting, setIsCommenting] = useState(false);
   const [isReInitiating, setIsReInitiating] = useState<number | null>(null);
@@ -182,10 +191,12 @@ export default function OnboardingPage() {
   const canCreate = hasRole("senior hr") || hasRole("hr");
   const isJuniorHr = hasRole("junior hr") && !canCreate;
   const canHeadHrApprove = hasRole("hr head");
-  const canChroApprove = hasRole("chro");
-  const canSuperAdminApprove = hasRole("super admin");
+  const canAdminApprove = hasRole("admin");
+  const myAdditionalApproverDesignations = ADDITIONAL_APPROVER_DESIGNATIONS.filter((designation) =>
+      hasRole(additionalApproverRoleName(designation))
+  );
   const requestSummary = useMemo(() => {
-    const pendingCount = requests.filter((request) => !["Super Admin Approved", "Rejected", "Cancelled"].includes(request.workflowStage)).length;
+    const pendingCount = requests.filter((request) => !ONBOARDING_CLOSED_STAGES.includes(request.workflowStage)).length;
     const closedCount = requests.filter((request) => ["Rejected", "Cancelled"].includes(request.workflowStage)).length;
     return { pendingCount, closedCount };
   }, [requests]);
@@ -204,7 +215,7 @@ export default function OnboardingPage() {
       return requests;
     }
     if (trackerStatusFilter === "pending") {
-      return requests.filter((request) => !["Super Admin Approved", "Rejected", "Cancelled"].includes(request.workflowStage));
+      return requests.filter((request) => !ONBOARDING_CLOSED_STAGES.includes(request.workflowStage));
     }
     return requests.filter((request) => ["Rejected", "Cancelled"].includes(request.workflowStage));
   }, [requests, trackerStatusFilter]);
@@ -376,10 +387,10 @@ export default function OnboardingPage() {
       return canHeadHrApprove;
     }
     if (request.workflowStage === "Head HR Approved") {
-      return canChroApprove;
+      return canAdminApprove;
     }
-    if (request.workflowStage === "CHRO Approved") {
-      return canSuperAdminApprove;
+    if (request.workflowStage === "Additional Approval Pending") {
+      return !!request.additionalApproverDesignation && myAdditionalApproverDesignations.includes(request.additionalApproverDesignation);
     }
     return false;
   }
@@ -396,7 +407,7 @@ export default function OnboardingPage() {
     if (isJuniorHr) {
       return false;
     }
-    if (request.workflowStage === "Super Admin Approved" || request.workflowStage === "Rejected" || request.workflowStage === "Refer Back") {
+    if (request.workflowStage === "Admin Approved" || request.workflowStage === "Additional Approval Approved" || request.workflowStage === "Rejected" || request.workflowStage === "Refer Back") {
       return false;
     }
     if (request.createdByUsername.toLowerCase() !== username) {
@@ -505,6 +516,10 @@ export default function OnboardingPage() {
     return new Date(value).toLocaleString("en-IN");
   }
 
+  function requiresAdditionalApproverChoice() {
+    return !!selectedRequest && selectedRequest.workflowStage === "Head HR Approved" && actionType === "APPROVE" && canAdminApprove;
+  }
+
   async function submitAction() {
     if (!selectedRequest) {
       return;
@@ -517,11 +532,19 @@ export default function OnboardingPage() {
       toast.error("Approval comment is required.");
       return;
     }
+    if (requiresAdditionalApproverChoice() && !additionalApproverChoice) {
+      toast.error("Please choose whether to route this for an additional approval.");
+      return;
+    }
     setIsActioning(true);
     try {
       await takeOnboardingAction(token, selectedRequest.id, {
         decision: actionType,
         comment: actionComment.trim(),
+        additionalApproverDesignation:
+            requiresAdditionalApproverChoice() && additionalApproverChoice !== "NONE" && additionalApproverChoice !== ""
+                ? additionalApproverChoice
+                : null,
       });
       toast.success(
           actionType === "APPROVE"
@@ -836,6 +859,7 @@ export default function OnboardingPage() {
                                               onClick={() => {
                                                 setActionType("APPROVE");
                                                 setActionComment("");
+                                                setAdditionalApproverChoice("");
                                                 setSelectedRequest(request);
                                               }}
                                               size="sm"
@@ -848,6 +872,7 @@ export default function OnboardingPage() {
                                               onClick={() => {
                                                 setActionType("REFER_BACK");
                                                 setActionComment("");
+                                                setAdditionalApproverChoice("");
                                                 setSelectedRequest(request);
                                               }}
                                               size="sm"
@@ -861,6 +886,7 @@ export default function OnboardingPage() {
                                               onClick={() => {
                                                 setActionType("REJECT");
                                                 setActionComment("");
+                                                setAdditionalApproverChoice("");
                                                 setSelectedRequest(request);
                                               }}
                                               size="sm"
@@ -1057,6 +1083,37 @@ export default function OnboardingPage() {
                   </div>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto p-6">
+                  {requiresAdditionalApproverChoice() ? (
+                      <div className="mb-5 rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
+                        <p className="text-sm font-semibold text-indigo-900">Additional approval required?</p>
+                        <p className="mt-1 text-xs text-indigo-700">
+                          You can finalize this request now, or route it to another designation for one more approval before the employee profile is created.
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Button
+                              className={additionalApproverChoice === "NONE" ? "rounded-full" : "rounded-full bg-white text-indigo-700"}
+                              onClick={() => setAdditionalApproverChoice("NONE")}
+                              size="sm"
+                              type="button"
+                              variant={additionalApproverChoice === "NONE" ? "default" : "outline"}
+                          >
+                            No, finalize now
+                          </Button>
+                          {ADDITIONAL_APPROVER_DESIGNATIONS.map((designation) => (
+                              <Button
+                                  className={additionalApproverChoice === designation ? "rounded-full" : "rounded-full bg-white text-indigo-700"}
+                                  key={designation}
+                                  onClick={() => setAdditionalApproverChoice(designation)}
+                                  size="sm"
+                                  type="button"
+                                  variant={additionalApproverChoice === designation ? "default" : "outline"}
+                              >
+                                {designation}
+                              </Button>
+                          ))}
+                        </div>
+                      </div>
+                  ) : null}
                   <MentionTextareaField
                       className="min-h-35"
                       label={actionType === "REFER_BACK" ? "Clarification / Change Comment *" : "Approval Comment *"}
@@ -1083,9 +1140,7 @@ export default function OnboardingPage() {
                 items={commentsRequest.approvalTrail}
                 canSendComment={
                     !isJuniorHr &&
-                    commentsRequest.workflowStage !== "Super Admin Approved" &&
-                    commentsRequest.workflowStage !== "Rejected" &&
-                    commentsRequest.workflowStage !== "Cancelled"
+                    !ONBOARDING_CLOSED_STAGES.includes(commentsRequest.workflowStage)
                 }
                 isSendingComment={isCommenting}
                 mentionSearchAction={mentionSearch}

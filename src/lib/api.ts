@@ -21,6 +21,42 @@ export type UserProfile = {
   reportingManagerRoleName: string | null;
   roles: string[];
   currentProjects: SelfProjectAssignment[];
+  personalEmailAddress: string | null;
+  phoneNumber: string | null;
+  educationQualification: string | null;
+  bankDetailsEditWindowOpen: boolean;
+  bankDetailsEditWindowMessage: string | null;
+};
+
+export type UserProfileUpdateRequest = {
+  personalEmailAddress: string | null;
+  phoneNumber: string | null;
+  educationQualification: string | null;
+};
+
+export type BankAccountType = "SAVINGS" | "CURRENT";
+
+export type BankDetails = {
+  id: number;
+  accountHolderName: string;
+  bankName: string;
+  maskedAccountNumber: string;
+  ifscCode: string;
+  branchName: string;
+  accountType: string;
+  updatedAt: string;
+  editWindowOpen: boolean;
+  editWindowMessage: string | null;
+};
+
+export type BankDetailsUpsertRequest = {
+  accountHolderName: string;
+  bankName: string;
+  accountNumber: string;
+  confirmAccountNumber: string;
+  ifscCode: string;
+  branchName: string;
+  accountType: BankAccountType;
 };
 
 export type UserMentionOption = {
@@ -94,11 +130,25 @@ export type RemoveRolesResponse = {
 export type OnboardingWorkflowStage =
     | "HR Submitted"
     | "Head HR Approved"
+    | "Additional Approval Pending"
+    | "Admin Approved"
+    | "Additional Approval Approved"
+    // Retained for the (separate) employee profile-update-request workflow, which still uses
+    // the original 4-stage HR -> Head HR -> CHRO -> Super Admin approval chain.
     | "CHRO Approved"
     | "Super Admin Approved"
     | "Refer Back"
     | "Cancelled"
     | "Rejected";
+
+export type OnboardingAdditionalApproverDesignation = "Super Admin" | "CHRO" | "CEO" | "CTO";
+
+export const ONBOARDING_CLOSED_STAGES: OnboardingWorkflowStage[] = [
+  "Admin Approved",
+  "Additional Approval Approved",
+  "Rejected",
+  "Cancelled",
+];
 
 export type OnboardingApprovalTrailItem = {
   step: string;
@@ -125,6 +175,7 @@ export type OnboardingRequest = {
   educationQualification: string | null;
   interviewStage: string;
   workflowStage: OnboardingWorkflowStage;
+  additionalApproverDesignation: OnboardingAdditionalApproverDesignation | null;
   createdByUsername: string;
   generatedEmployeeId: string | null;
   generatedEmailAddress: string | null;
@@ -717,6 +768,35 @@ export async function getCurrentUser(accessToken: string) {
       Authorization: "Bearer " + accessToken,
     },
     cache: "no-store",
+  });
+}
+
+export async function updateCurrentUserProfile(accessToken: string, payload: UserProfileUpdateRequest) {
+  return request<UserProfile>("/api/users/me", {
+    method: "PUT",
+    headers: {
+      Authorization: "Bearer " + accessToken,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getCurrentUserBankDetails(accessToken: string) {
+  return request<BankDetails | null>("/api/users/me/bank-details", {
+    headers: {
+      Authorization: "Bearer " + accessToken,
+    },
+    cache: "no-store",
+  });
+}
+
+export async function saveCurrentUserBankDetails(accessToken: string, payload: BankDetailsUpsertRequest) {
+  return request<BankDetails>("/api/users/me/bank-details", {
+    method: "PUT",
+    headers: {
+      Authorization: "Bearer " + accessToken,
+    },
+    body: JSON.stringify(payload),
   });
 }
 
@@ -1427,7 +1507,11 @@ export async function createOnboardingRequest(
 export async function takeOnboardingAction(
     accessToken: string,
     requestId: number,
-    payload: { decision: "APPROVE" | "REJECT" | "REFER_BACK"; comment: string }
+    payload: {
+      decision: "APPROVE" | "REJECT" | "REFER_BACK";
+      comment: string;
+      additionalApproverDesignation?: OnboardingAdditionalApproverDesignation | null;
+    }
 ) {
   return request<OnboardingRequest>(`/api/onboarding-requests/${requestId}/actions`, {
     method: "PATCH",
