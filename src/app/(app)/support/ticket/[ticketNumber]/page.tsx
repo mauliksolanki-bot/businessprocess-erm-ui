@@ -49,10 +49,21 @@ function statusTone(status: SupportTicket["status"]) {
   return "border-amber-200 bg-amber-50 text-amber-700";
 }
 
+function activityTone(actionType: string) {
+  if (actionType.startsWith("GITHUB_COMMENT")) {
+    return "bg-blue-50 text-blue-700";
+  }
+  if (actionType.startsWith("GITHUB_")) {
+    return "bg-violet-50 text-violet-700";
+  }
+  return "bg-zinc-100 text-zinc-600";
+}
+
 function renderCommentText(commentText: string | null) {
   if (!commentText) {
     return <div className="mt-1 text-zinc-500">-</div>;
   }
+
   const lines = commentText.split(/\r?\n/).filter((line) => line.trim().length > 0);
   return (
       <div className="mt-1 space-y-1">
@@ -474,7 +485,7 @@ export default function SupportTicketDetailsPage() {
                             <span className="font-medium text-zinc-800">
                               {item.actorUsername}
                               {item.actionType && item.actionType !== "COMMENT" && item.actionType !== "STATUS_CHANGE" ? (
-                                <span className="ml-2 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
+                                <span className={`ml-2 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${activityTone(item.actionType)}`}>
                                   {item.actionType.replaceAll("_", " ")}
                                 </span>
                               ) : null}
