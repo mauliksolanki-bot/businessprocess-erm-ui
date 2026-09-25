@@ -689,6 +689,8 @@ export type SupportTicket = {
   closedAt: string | null;
   createdByUsername: string;
   updatedByUsername: string;
+  vendorTicketNumber: string | null;
+  vendorTicketUrl: string | null;
   comments: SupportTicketComment[];
   createdAt: string;
   updatedAt: string;
