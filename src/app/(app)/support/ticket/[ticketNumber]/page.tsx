@@ -400,6 +400,24 @@ export default function SupportTicketDetailsPage() {
                 <FloatingInputField label="Created On" value={new Date(ticket.createdAt).toLocaleString()} readOnly disabled className={NON_EDITABLE_FIELD_CLASS} />
               </div>
 
+              {ticket.vendorTicketNumber ? (
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <FloatingInputField label="Vendor Ticket Number" value={ticket.vendorTicketNumber} readOnly disabled className={NON_EDITABLE_FIELD_CLASS} />
+                    {ticket.vendorTicketUrl ? (
+                        <div className="flex items-end pb-2">
+                          <a
+                              className="text-sm text-blue-700 hover:underline"
+                              href={ticket.vendorTicketUrl}
+                              rel="noopener noreferrer"
+                              target="_blank"
+                          >
+                            View on GitHub
+                          </a>
+                        </div>
+                    ) : null}
+                  </div>
+              ) : null}
+
               <FloatingInputField label="Short Description" value={ticket.shortDescription} readOnly disabled className={NON_EDITABLE_FIELD_CLASS} />
 
               <FloatingTextareaField label="Description" value={ticket.description} readOnly disabled className={NON_EDITABLE_FIELD_CLASS} />
