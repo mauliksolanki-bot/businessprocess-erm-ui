@@ -450,7 +450,7 @@ export default function SupportTicketDetailsPage() {
             ) : null}
 
             <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-              <p className="text-sm font-semibold text-zinc-900">Comments</p>
+              <p className="text-sm font-semibold text-zinc-900">Comments &amp; activity</p>
               <div className="mt-3 flex gap-2">
                 <MentionTextareaField
                     className="min-h-[72px]"
@@ -471,7 +471,14 @@ export default function SupportTicketDetailsPage() {
                     [...ticket.comments].reverse().map((item) => (
                         <div key={item.id} className="rounded-md border border-zinc-100 bg-white p-3 text-sm">
                           <div className="flex items-center justify-between">
-                            <span className="font-medium text-zinc-800">{item.actorUsername}</span>
+                            <span className="font-medium text-zinc-800">
+                              {item.actorUsername}
+                              {item.actionType && item.actionType !== "COMMENT" && item.actionType !== "STATUS_CHANGE" ? (
+                                <span className="ml-2 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
+                                  {item.actionType.replaceAll("_", " ")}
+                                </span>
+                              ) : null}
+                            </span>
                             <span className="text-xs text-zinc-500">{new Date(item.createdAt).toLocaleString()}</span>
                           </div>
                           {renderCommentText(item.commentText)}
