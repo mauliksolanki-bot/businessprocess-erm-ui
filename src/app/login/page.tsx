@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   BellRing,
+  CalendarDays,
   CheckCircle2,
   Eye,
   EyeOff,
@@ -53,9 +54,9 @@ export default function LoginPage() {
   }, [router]);
 
   function getBannerStyle(type: NotificationBanner["notificationType"]) {
-    if (type === "Urgent") return "border-rose-500 bg-rose-600 shadow-rose-300/40";
-    if (type === "Low Priority") return "border-amber-500 bg-amber-600 shadow-amber-300/40";
-    return "border-emerald-500 bg-emerald-600 shadow-emerald-300/40";
+    if (type === "Urgent") return "border-rose-500 bg-gradient-to-br from-rose-600 via-red-600 to-rose-800 shadow-rose-300/40";
+    if (type === "Low Priority") return "border-amber-500 bg-gradient-to-br from-yellow-600 via-amber-600 to-orange-700 shadow-amber-300/40";
+    return "border-emerald-500 bg-gradient-to-br from-emerald-600 via-green-700 to-teal-800 shadow-emerald-300/40";
   }
 
   function getBannerIcon(type: NotificationBanner["notificationType"]) {
@@ -159,7 +160,7 @@ export default function LoginPage() {
             </div>
           </section>
 
-          <Card className="w-full rounded-none border-0 bg-transparent shadow-none">
+          <Card className="flex h-full w-full flex-col rounded-none border-0 bg-transparent shadow-none">
             <CardHeader className="space-y-4 px-6 pb-0 pt-6 sm:px-8 sm:pt-8 lg:px-7 lg:pt-7 xl:px-8 xl:pt-6 2xl:space-y-6 2xl:px-10 2xl:pt-10">
               <div className="flex items-start justify-between gap-4">
                 <div className="lg:hidden">
@@ -199,7 +200,7 @@ export default function LoginPage() {
               </div>
             </CardHeader>
 
-            <CardContent className="px-6 pb-6 pt-5 sm:px-8 sm:pb-8 lg:px-7 lg:pb-7 lg:pt-4 xl:px-8 xl:pb-6 xl:pt-4 2xl:px-10 2xl:pb-10 2xl:pt-6">
+            <CardContent className="flex flex-1 flex-col px-6 pb-6 pt-5 sm:px-8 sm:pb-8 lg:px-7 lg:pb-7 lg:pt-4 xl:px-8 xl:pb-6 xl:pt-4 2xl:px-10 2xl:pb-10 2xl:pt-6">
               <div className="rounded-[28px] border border-zinc-200/80 bg-white/90 p-5 shadow-[0_18px_50px_-24px_rgba(15,23,42,0.25)] sm:p-6 lg:p-4 xl:p-5 2xl:p-6">
                 <form className="space-y-4 lg:space-y-3 xl:space-y-3.5 2xl:space-y-5" onSubmit={handleSubmit}>
                   <FloatingInputField
@@ -250,27 +251,35 @@ export default function LoginPage() {
               </div>
 
               {notificationBanners.length > 0 ? (
-                  <section aria-label="Active notifications" className="mt-4 space-y-3" aria-live="polite">
+                  <section aria-label="Active notifications" className="mt-4 flex flex-1 flex-col gap-3" aria-live="polite">
                     {notificationBanners.map((banner) => {
                       const BannerIcon = getBannerIcon(banner.notificationType);
                       return (
                           <article
-                              className={`relative overflow-hidden rounded-2xl border px-4 py-4 text-white shadow-lg ${getBannerStyle(banner.notificationType)}`}
+                              className={`relative isolate flex min-h-40 flex-1 flex-col justify-center overflow-hidden rounded-[26px] border px-5 py-5 text-white shadow-xl sm:px-6 sm:py-6 2xl:px-7 ${getBannerStyle(banner.notificationType)}`}
                               key={banner.id}
                           >
-                            <div className="pointer-events-none absolute -right-5 -top-8 h-28 w-28 rounded-full border-[18px] border-white/10" />
-                            <div className="relative flex items-start gap-3">
-                              <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20">
-                                <BannerIcon className="h-4 w-4" />
+                            <div className="pointer-events-none absolute -right-10 -top-14 h-48 w-48 rounded-full border-[26px] border-white/10" />
+                            <div className="pointer-events-none absolute -bottom-20 -left-12 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
+                            <div className="relative flex items-start gap-4">
+                              <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25 shadow-inner sm:h-14 sm:w-14">
+                                <BannerIcon className="h-6 w-6" />
                               </span>
-                              <div className="min-w-0 flex-1">
+                              <div className="flex min-w-0 flex-1 flex-col">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <h2 className="text-sm font-bold tracking-wide">{banner.title}</h2>
-                                  <span className="rounded-full border border-white/25 bg-white/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
-                                    {banner.notificationType}
+                                  <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-white/75">ERM · Login notice</span>
+                                  <span className="rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm">
+                                    {banner.notificationType === "Urgent" ? "Action required" : banner.notificationType}
                                   </span>
                                 </div>
-                                <p className="mt-1.5 whitespace-pre-wrap text-sm leading-6 text-white">{banner.message}</p>
+                                <h2 className="mt-3 text-lg font-bold leading-snug tracking-tight text-white sm:text-xl">{banner.title}</h2>
+                                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/95 sm:text-[15px]">{banner.message}</p>
+                                <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-white/20 pt-3 text-xs font-medium text-white/85">
+                                  <CalendarDays className="h-4 w-4" />
+                                  <span>Visible {new Date(`${banner.startDate}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
+                                  <span className="text-white/60">through</span>
+                                  <span>{new Date(`${banner.endDate}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
+                                </div>
                               </div>
                             </div>
                           </article>
