@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
-import { BadgeCheck, BriefcaseBusiness, CalendarDays, Check, GraduationCap, Landmark, Lock, Mail, Pencil, Phone, ShieldCheck, User, UserRound, X } from "lucide-react";
+import { BadgeCheck, BriefcaseBusiness, CalendarDays, Check, Eye, GraduationCap, Landmark, Lock, Mail, Pencil, Phone, ShieldCheck, User, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/erm/page-header";
@@ -13,11 +13,15 @@ import {
   ApiError,
   getCurrentUser,
   getCurrentUserBankDetails,
+  getCurrentUserTeamMemberDetails,
+  getCurrentUserTeamMembers,
   saveCurrentUserBankDetails,
   updateCurrentUserProfile,
   type BankAccountType,
   type BankDetails,
   type UserProfile,
+  type TeamMemberDetails,
+  type TeamMemberSummary,
 } from "@/lib/api";
 import { loadSession } from "@/lib/auth-storage";
 
@@ -61,7 +65,7 @@ function formatProfileDate(value?: string | null) {
 }
 
 export default function ProfilePage() {
-  const [activeTab, setActiveTab] = useState<"personal" | "bank">("personal");
+  const [activeTab, setActiveTab] = useState<"personal" | "team" | "bank">("personal");
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [profileForm, setProfileForm] = useState<ProfileForm>(emptyProfileForm);
@@ -72,6 +76,12 @@ export default function ProfilePage() {
   const [bankForm, setBankForm] = useState<BankForm>(emptyBankForm);
   const [savingBank, setSavingBank] = useState(false);
   const [editingBank, setEditingBank] = useState(false);
+  const [teamMembers, setTeamMembers] = useState<TeamMemberSummary[]>([]);
+  const [teamMembersLoaded, setTeamMembersLoaded] = useState(false);
+  const [loadingTeamMembers, setLoadingTeamMembers] = useState(false);
+  const [teamMembersError, setTeamMembersError] = useState<string | null>(null);
+  const [selectedTeamMember, setSelectedTeamMember] = useState<TeamMemberDetails | null>(null);
+  const [loadingTeamMemberDetails, setLoadingTeamMemberDetails] = useState(false);
 
   const loadData = useCallback(async () => {
     const session = loadSession();
@@ -121,6 +131,48 @@ export default function ProfilePage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  async function loadTeamMembers() {
+    const session = loadSession();
+    if (!session) {
+      setTeamMembersError("Session not found. Please login again.");
+      return;
+    }
+    setLoadingTeamMembers(true);
+    setTeamMembersError(null);
+    try {
+      const members = await getCurrentUserTeamMembers(session.accessToken);
+      setTeamMembers(members);
+      setTeamMembersLoaded(true);
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : "Unable to load team members.";
+      setTeamMembersError(message);
+    } finally {
+      setLoadingTeamMembers(false);
+    }
+  }
+
+  async function openTeamMemberDetails(teamMemberId: number) {
+    const session = loadSession();
+    if (!session) {
+      toast.error("Session not found. Please login again.");
+      return;
+    }
+    setSelectedTeamMember(null);
+    setLoadingTeamMemberDetails(true);
+    try {
+      const member = await getCurrentUserTeamMemberDetails(session.accessToken, teamMemberId);
+      setSelectedTeamMember(member);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        toast.error(error.message || `Unable to load team member (${error.status})`);
+      } else {
+        toast.error("Unable to load team member details.");
+      }
+    } finally {
+      setLoadingTeamMemberDetails(false);
+    }
+  }
 
   async function handleProfileSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -240,6 +292,17 @@ export default function ProfilePage() {
           >
             <User className="mr-2 h-4 w-4" />
             Personal Information
+          </Button>
+          <Button
+              className={activeTab === "team" ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-500 hover:to-indigo-500" : ""}
+              onClick={() => {
+                setActiveTab("team");
+                if (!teamMembersLoaded) void loadTeamMembers();
+              }}
+              variant={activeTab === "team" ? "default" : "ghost"}
+          >
+            <UserRound className="mr-2 h-4 w-4" />
+            Team Members
           </Button>
           <Button
               className={activeTab === "bank" ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-500 hover:to-teal-500" : ""}
@@ -422,6 +485,89 @@ export default function ProfilePage() {
                 </CardContent>
               </Card>
             </div>
+        ) : activeTab === "team" ? (
+            <Card className="overflow-hidden border-zinc-200 shadow-md shadow-blue-100/50">
+              <CardHeader className="border-b border-zinc-100 bg-gradient-to-r from-blue-50 via-white to-indigo-50">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <CardTitle className="flex items-center gap-2 text-zinc-900">
+                      <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
+                        <UserRound className="h-4 w-4" />
+                      </span>
+                      Team Members
+                    </CardTitle>
+                    <CardDescription className="mt-1">Employees who report directly to you. Select the eye icon to view their profile and current project assignments.</CardDescription>
+                  </div>
+                  {!loadingTeamMembers && !teamMembersError ? (
+                    <span className="rounded-full border border-blue-100 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 shadow-sm">
+                      {teamMembers.length} {teamMembers.length === 1 ? "member" : "members"}
+                    </span>
+                  ) : null}
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {loadingTeamMembers ? (
+                  <div className="flex items-center justify-center py-16"><Spinner className="h-6 w-6" /></div>
+                ) : teamMembersError ? (
+                  <div className="m-5 rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-800">
+                    <p>{teamMembersError}</p>
+                    <Button className="mt-3" onClick={() => void loadTeamMembers()} size="sm" variant="outline">Try again</Button>
+                  </div>
+                ) : teamMembers.length === 0 ? (
+                  <div className="px-6 py-14 text-center">
+                    <span className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 ring-1 ring-blue-100">
+                      <UserRound className="h-5 w-5" />
+                    </span>
+                    <p className="mt-4 font-semibold text-zinc-900">No direct reports found</p>
+                    <p className="mt-1 text-sm text-zinc-500">Team members reporting to you will appear here.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[760px] text-left text-sm">
+                      <thead className="bg-zinc-50 text-[11px] uppercase tracking-wide text-zinc-500">
+                        <tr>
+                          <th className="px-5 py-3 font-semibold">Team member</th>
+                          <th className="px-5 py-3 font-semibold">Employee ID</th>
+                          <th className="px-5 py-3 font-semibold">Designation</th>
+                          <th className="px-5 py-3 font-semibold">Department</th>
+                          <th className="px-5 py-3 font-semibold">Status</th>
+                          <th className="px-5 py-3 text-right font-semibold">Details</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-100">
+                        {teamMembers.map((member) => (
+                          <tr className="transition hover:bg-blue-50/40" key={member.id}>
+                            <td className="px-5 py-4">
+                              <p className="font-semibold text-zinc-900">{member.fullName}</p>
+                              <p className="mt-0.5 text-xs text-zinc-500">{member.email}</p>
+                            </td>
+                            <td className="px-5 py-4 font-medium text-zinc-700">{member.employeeId || "—"}</td>
+                            <td className="px-5 py-4 text-zinc-700">{member.designation}</td>
+                            <td className="px-5 py-4 text-zinc-700">{member.department}</td>
+                            <td className="px-5 py-4">
+                              <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${member.employmentStatus.toLowerCase() === "active" ? "bg-emerald-50 text-emerald-700" : "bg-zinc-100 text-zinc-600"}`}>
+                                {member.employmentStatus}
+                              </span>
+                            </td>
+                            <td className="px-5 py-4 text-right">
+                              <Button
+                                  aria-label={`View ${member.fullName} details`}
+                                  className="h-9 w-9 border-blue-100 p-0 text-blue-700 hover:bg-blue-50"
+                                  onClick={() => void openTeamMemberDetails(member.id)}
+                                  title="View team member details"
+                                  variant="outline"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
         ) : (
             <Card className="border-emerald-100 shadow-md shadow-emerald-100/40">
               <CardHeader className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white">
@@ -538,6 +684,13 @@ export default function ProfilePage() {
               </CardContent>
             </Card>
         )}
+        {loadingTeamMemberDetails || selectedTeamMember ? (
+          <TeamMemberDetailsModal
+              loading={loadingTeamMemberDetails}
+              member={selectedTeamMember}
+              onClose={() => setSelectedTeamMember(null)}
+          />
+        ) : null}
       </>
   );
 }
@@ -571,6 +724,123 @@ function ProjectAssignmentDetail({ icon, label, value }: { icon: ReactNode; labe
           <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
         </div>
         <p className="mt-1.5 truncate text-sm font-semibold text-zinc-900">{value}</p>
+      </div>
+  );
+}
+
+function TeamMemberDetailsModal({
+  member,
+  loading,
+  onClose,
+}: {
+  member: TeamMemberDetails | null;
+  loading: boolean;
+  onClose: () => void;
+}) {
+  return (
+      <div
+          aria-label={loading ? "Loading team member details" : `${member?.fullName ?? "Team member"} details`}
+          aria-modal="true"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/55 p-3 backdrop-blur-sm sm:p-6"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) onClose();
+          }}
+          role="dialog"
+      >
+        <div className="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-white/60 bg-white shadow-2xl shadow-slate-950/30">
+          {loading || !member ? (
+            <div className="flex min-h-64 items-center justify-center"><Spinner className="h-7 w-7" /></div>
+          ) : (
+            <>
+              <div className="flex items-start justify-between gap-4 bg-gradient-to-r from-blue-700 via-indigo-600 to-cyan-600 px-5 py-5 text-white sm:px-7">
+                <div className="flex min-w-0 items-center gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/30">
+                    <UserRound className="h-6 w-6" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-blue-100">Team member profile</p>
+                    <h2 className="mt-1 truncate text-xl font-semibold sm:text-2xl">{member.fullName}</h2>
+                    <p className="mt-1 text-sm text-blue-100">{member.designation} <span className="px-1">·</span> {member.employeeId || "Employee ID pending"}</p>
+                  </div>
+                </div>
+                <Button aria-label="Close team member details" className="h-9 w-9 shrink-0 border-white/30 p-0 text-white hover:bg-white/15" onClick={onClose} variant="outline">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="min-h-0 space-y-6 overflow-y-auto p-5 sm:p-7">
+                <section>
+                  <h3 className="mb-3 text-sm font-semibold text-zinc-900">Employee information</h3>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <OverviewItem label="Full name" value={member.fullName} />
+                    <OverviewItem label="Employee ID" value={member.employeeId} />
+                    <OverviewItem label="Username" value={member.username} />
+                    <OverviewItem label="Work email" value={member.email} />
+                    <OverviewItem label="Personal email" value={member.personalEmailAddress} />
+                    <OverviewItem label="Phone number" value={member.phoneNumber} />
+                    <OverviewItem label="Department" value={member.department} />
+                    <OverviewItem label="Designation" value={member.designation} />
+                    <OverviewItem label="Employment status" value={member.employmentStatus} />
+                    <OverviewItem label="Joined date" value={formatProfileDate(member.joinedDate)} />
+                    <OverviewItem label="Reporting manager" value={member.reportingManagerFullName} />
+                    <OverviewItem label="Manager role" value={member.reportingManagerRoleName} />
+                    <div className="rounded-xl border border-zinc-100 bg-zinc-50/70 px-4 py-3 sm:col-span-2 lg:col-span-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Education details</p>
+                      <p className="mt-1 break-words text-sm font-medium text-zinc-900">{member.educationQualification || "Not provided"}</p>
+                    </div>
+                  </div>
+                </section>
+
+                <section>
+                  <h3 className="mb-3 text-sm font-semibold text-zinc-900">Assigned roles</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {member.roles.length ? member.roles.map((role) => (
+                      <span className="rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700" key={role}>{role}</span>
+                    )) : <span className="text-sm text-zinc-500">No roles assigned</span>}
+                  </div>
+                </section>
+
+                <section>
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-zinc-900">Current project assignments</h3>
+                    <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">{member.currentProjects.length} active</span>
+                  </div>
+                  {member.currentProjects.length ? (
+                    <div className="grid gap-3 lg:grid-cols-2">
+                      {member.currentProjects.map((project) => (
+                        <article className="overflow-hidden rounded-2xl border border-zinc-200 bg-white" key={project.allocationId}>
+                          <div className="flex items-start justify-between gap-3 border-b border-zinc-100 bg-gradient-to-r from-white to-indigo-50/60 px-4 py-3.5">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold text-zinc-900">{project.projectName}</p>
+                              <p className="mt-1 text-xs text-zinc-500">{project.projectCode} <span className="px-1 text-zinc-300">·</span> {project.allocationCode}</p>
+                            </div>
+                            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">{project.status}</span>
+                          </div>
+                          <div className="grid gap-2 p-3 sm:grid-cols-3">
+                            <ProjectAssignmentDetail icon={<CalendarDays className="h-4 w-4" />} label="Start date" value={formatProfileDate(project.startDate)} />
+                            <ProjectAssignmentDetail icon={<CalendarDays className="h-4 w-4" />} label="End date" value={formatProfileDate(project.endDate)} />
+                            <ProjectAssignmentDetail icon={<BriefcaseBusiness className="h-4 w-4" />} label="Allocation type" value={project.allocationType} />
+                          </div>
+                          <div className="px-3 pb-3">
+                            <div className="mb-1.5 flex justify-between text-xs">
+                              <span className="text-zinc-500">Allocation</span>
+                              <span className="font-semibold tabular-nums text-indigo-700">{new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(project.allocationPercent)}%</span>
+                            </div>
+                            <div aria-label={`${project.allocationPercent}% allocation`} className="h-1.5 overflow-hidden rounded-full bg-indigo-100">
+                              <div className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-600" style={{ width: `${Math.min(100, Math.max(0, project.allocationPercent))}%` }} />
+                            </div>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-8 text-center text-sm text-zinc-500">No active project assignments.</div>
+                  )}
+                </section>
+              </div>
+            </>
+          )}
+        </div>
       </div>
   );
 }

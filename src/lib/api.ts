@@ -113,6 +113,28 @@ export type EmployeeDirectReport = {
   employmentStatus: string;
 };
 
+export type TeamMemberSummary = {
+  id: number;
+  fullName: string;
+  employeeId: string | null;
+  email: string;
+  department: string;
+  designation: string;
+  employmentStatus: string;
+};
+
+export type TeamMemberDetails = TeamMemberSummary & {
+  username: string;
+  joinedDate: string | null;
+  reportingManagerFullName: string;
+  reportingManagerRoleName: string | null;
+  roles: string[];
+  personalEmailAddress: string | null;
+  phoneNumber: string | null;
+  educationQualification: string | null;
+  currentProjects: SelfProjectAssignment[];
+};
+
 export type RoleSummary = {
   id: number;
   name: string;
@@ -996,6 +1018,24 @@ export async function getEmployeeById(accessToken: string, employeeId: number) {
 
 export async function getEmployeeDirectReports(accessToken: string, employeeId: number) {
   return request<EmployeeDirectReport[]>(`/api/employees/${employeeId}/direct-reports`, {
+    headers: {
+      Authorization: "Bearer " + accessToken,
+    },
+    cache: "no-store",
+  });
+}
+
+export async function getCurrentUserTeamMembers(accessToken: string) {
+  return request<TeamMemberSummary[]>("/api/users/me/team-members", {
+    headers: {
+      Authorization: "Bearer " + accessToken,
+    },
+    cache: "no-store",
+  });
+}
+
+export async function getCurrentUserTeamMemberDetails(accessToken: string, teamMemberId: number) {
+  return request<TeamMemberDetails>(`/api/users/me/team-members/${teamMemberId}`, {
     headers: {
       Authorization: "Bearer " + accessToken,
     },
