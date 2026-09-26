@@ -113,6 +113,12 @@ export type EmployeeDirectReport = {
   employmentStatus: string;
 };
 
+export type EmployeePasswordResetResponse = {
+  employeeId: number;
+  employeeIdCode: string | null;
+  temporaryPassword: string;
+};
+
 export type TeamMemberSummary = {
   id: number;
   fullName: string;
@@ -1019,6 +1025,16 @@ export async function getEmployeeById(accessToken: string, employeeId: number) {
 
 export async function getEmployeeDirectReports(accessToken: string, employeeId: number) {
   return request<EmployeeDirectReport[]>(`/api/employees/${employeeId}/direct-reports`, {
+    headers: {
+      Authorization: "Bearer " + accessToken,
+    },
+    cache: "no-store",
+  });
+}
+
+export async function resetEmployeePassword(accessToken: string, employeeId: number) {
+  return request<EmployeePasswordResetResponse>(`/api/employees/${employeeId}/password-reset`, {
+    method: "POST",
     headers: {
       Authorization: "Bearer " + accessToken,
     },

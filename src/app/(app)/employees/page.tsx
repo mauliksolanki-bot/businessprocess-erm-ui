@@ -1,7 +1,7 @@
 "use client";
 
 import { type FormEvent, useEffect, useMemo, useState } from "react";
-import { Eye, PencilLine, Search, Sparkles } from "lucide-react";
+import { Check, Copy, Eye, KeyRound, PencilLine, Search, ShieldAlert, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { DataTablePagination } from "@/components/erm/data-table-pagination";
@@ -21,9 +21,11 @@ import {
   getOnboardingDesignationOptions,
   getOnboardingManagerOptions,
   type Employee,
+  type EmployeePasswordResetResponse,
   type EmployeeDirectReport,
   type OnboardingDesignationOption,
   type OnboardingManagerOption,
+  resetEmployeePassword,
   updateEmployee,
 } from "@/lib/api";
 import { loadSession } from "@/lib/auth-storage";
@@ -83,9 +85,14 @@ export default function EmployeesPage() {
   const [replacementTeamLeadOptions, setReplacementTeamLeadOptions] = useState<OnboardingManagerOption[]>([]);
   const [isLoadingPromotionReassignment, setIsLoadingPromotionReassignment] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [passwordResetEmployee, setPasswordResetEmployee] = useState<Employee | null>(null);
+  const [passwordResetResult, setPasswordResetResult] = useState<EmployeePasswordResetResponse | null>(null);
+  const [passwordResetLoading, setPasswordResetLoading] = useState(false);
+  const [passwordCopied, setPasswordCopied] = useState(false);
   const roleNames = useMemo(() => (loadSession()?.roles ?? []).map((role) => role.toLowerCase()), []);
   const hasSeniorHrRole = roleNames.includes("senior hr");
   const canEditEmployees = hasSeniorHrRole;
+  const canResetEmployeePasswords = roleNames.includes("admin");
 
   function getAccessToken() {
     const session = loadSession();
@@ -332,6 +339,53 @@ export default function EmployeesPage() {
     resetPromotionReassignmentState();
   }
 
+  function openPasswordReset(employee: Employee) {
+    setPasswordResetEmployee(employee);
+    setPasswordResetResult(null);
+    setPasswordCopied(false);
+  }
+
+  function closePasswordReset() {
+    if (passwordResetLoading) return;
+    setPasswordResetEmployee(null);
+    setPasswordResetResult(null);
+    setPasswordCopied(false);
+  }
+
+  async function confirmPasswordReset() {
+    if (!passwordResetEmployee) return;
+    const accessToken = getAccessToken();
+    if (!accessToken) return;
+
+    setPasswordResetLoading(true);
+    try {
+      const result = await resetEmployeePassword(accessToken, passwordResetEmployee.id);
+      setPasswordResetResult(result);
+      toast.success("Password reset successfully.");
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 403) {
+        toast.error("Only Admin users can reset employee passwords.");
+      } else if (error instanceof ApiError && error.status === 404) {
+        toast.error("Employee record not found.");
+      } else {
+        toast.error("Unable to reset this employee's password. Please try again.");
+      }
+    } finally {
+      setPasswordResetLoading(false);
+    }
+  }
+
+  async function copyTemporaryPassword() {
+    if (!passwordResetResult) return;
+    try {
+      await navigator.clipboard.writeText(passwordResetResult.temporaryPassword);
+      setPasswordCopied(true);
+      toast.success("Temporary password copied.");
+    } catch {
+      toast.error("Unable to copy the password. Please select and copy it manually.");
+    }
+  }
+
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     if (dialogOpen) {
@@ -480,6 +534,18 @@ export default function EmployeesPage() {
                                   >
                                     <Eye className="h-4 w-4" />
                                   </Button>
+                                  {canResetEmployeePasswords ? (
+                                      <Button
+                                          aria-label={`Reset password for ${employee.fullName}`}
+                                          className="h-9 w-9 rounded-full border-amber-200 bg-amber-50 p-0 text-amber-700 hover:bg-amber-100"
+                                          onClick={() => openPasswordReset(employee)}
+                                          size="sm"
+                                          title="Reset password"
+                                          variant="outline"
+                                      >
+                                        <KeyRound className="h-4 w-4" />
+                                      </Button>
+                                  ) : null}
                                   {canEditEmployees ? (
                                       <Button
                                           aria-label={`Edit ${employee.fullName}`}
@@ -554,6 +620,83 @@ export default function EmployeesPage() {
                     saving={dialogSaving}
                 />
             )
+        ) : null}
+        {passwordResetEmployee ? (
+          <div
+              aria-labelledby="password-reset-title"
+              aria-modal="true"
+              className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm"
+              onClick={(event) => {
+                if (event.target === event.currentTarget) closePasswordReset();
+              }}
+              role="dialog"
+          >
+            <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-white/60 bg-white shadow-2xl shadow-slate-950/30">
+              <div className="flex items-start justify-between gap-4 bg-gradient-to-r from-indigo-600 via-blue-600 to-cyan-600 px-5 py-5 text-white sm:px-6">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25">
+                    {passwordResetResult ? <Check className="h-5 w-5" /> : <KeyRound className="h-5 w-5" />}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-blue-100">Employee security</p>
+                    <h2 className="mt-1 text-lg font-semibold" id="password-reset-title">
+                      {passwordResetResult ? "Password reset complete" : "Reset employee password"}
+                    </h2>
+                  </div>
+                </div>
+                {!passwordResetLoading ? (
+                  <Button aria-label="Close password reset" className="h-9 w-9 shrink-0 rounded-full border-white/40 bg-white/10 p-0 text-white hover:bg-white/20" onClick={closePasswordReset} size="sm" variant="outline">
+                    <X className="h-4 w-4" />
+                  </Button>
+                ) : null}
+              </div>
+
+              <div className="space-y-5 p-5 sm:p-6">
+                {!passwordResetResult ? (
+                  <>
+                    <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                      <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+                      <div>
+                        <p className="font-semibold">Are you sure that you want to reset the password of user - {passwordResetEmployee.employeeId || "Employee ID pending"}</p>
+                        <p className="mt-1 text-xs leading-relaxed text-amber-800">The current password will stop working immediately. A new temporary password will be shown here after confirmation.</p>
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <Button disabled={passwordResetLoading} onClick={closePasswordReset} type="button" variant="outline">Cancel</Button>
+                      <Button className="gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500" disabled={passwordResetLoading} onClick={() => void confirmPasswordReset()} type="button">
+                        <KeyRound className="h-4 w-4" />
+                        {passwordResetLoading ? "Resetting..." : "Reset password"}
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+                      <p className="font-semibold">Password reset successfully for {passwordResetResult.employeeIdCode || passwordResetEmployee.fullName}.</p>
+                      <p className="mt-1 text-xs leading-relaxed">Copy the temporary password now. It will no longer be visible after this popup is closed.</p>
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-zinc-500" htmlFor="temporary-password">Temporary password</label>
+                      <div className="flex items-center gap-2 rounded-xl border border-zinc-300 bg-zinc-50 p-2">
+                        <input
+                            className="min-w-0 flex-1 bg-transparent px-2 font-mono text-base font-semibold tracking-wide text-zinc-900 outline-none"
+                            id="temporary-password"
+                            readOnly
+                            value={passwordResetResult.temporaryPassword}
+                        />
+                        <Button aria-label="Copy temporary password" className="h-10 w-10 shrink-0 border-blue-200 bg-blue-50 p-0 text-blue-700 hover:bg-blue-100" onClick={() => void copyTemporaryPassword()} title="Copy password" type="button" variant="outline">
+                          {passwordCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="flex justify-end">
+                      <Button onClick={closePasswordReset} type="button" variant="secondary">Done</Button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
         ) : null}
       </>
   );
