@@ -118,6 +118,7 @@ export type TeamMemberSummary = {
   fullName: string;
   employeeId: string | null;
   email: string;
+  roles: string[];
   department: string;
   designation: string;
   employmentStatus: string;
@@ -126,9 +127,9 @@ export type TeamMemberSummary = {
 export type TeamMemberDetails = TeamMemberSummary & {
   username: string;
   joinedDate: string | null;
+  updatedAt: string;
   reportingManagerFullName: string;
   reportingManagerRoleName: string | null;
-  roles: string[];
   personalEmailAddress: string | null;
   phoneNumber: string | null;
   educationQualification: string | null;
