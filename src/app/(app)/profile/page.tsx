@@ -1,7 +1,7 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
-import { BadgeCheck, Landmark, Lock, ShieldCheck, User } from "lucide-react";
+import { FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
+import { BadgeCheck, Check, GraduationCap, Landmark, Lock, Mail, Pencil, Phone, ShieldCheck, User, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/erm/page-header";
@@ -58,6 +58,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [profileForm, setProfileForm] = useState<ProfileForm>(emptyProfileForm);
+  const [editingProfile, setEditingProfile] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
 
   const [bankDetails, setBankDetails] = useState<BankDetails | null>(null);
@@ -89,6 +90,7 @@ export default function ProfilePage() {
         phoneNumber: profileData.phoneNumber ?? "",
         educationQualification: profileData.educationQualification ?? "",
       });
+      setEditingProfile(false);
 
       if (bankResult.status === "fulfilled") {
         const bankData = bankResult.value;
@@ -128,6 +130,12 @@ export default function ProfilePage() {
         educationQualification: profileForm.educationQualification.trim() || null,
       });
       setProfile(updated);
+      setProfileForm({
+        personalEmailAddress: updated.personalEmailAddress ?? "",
+        phoneNumber: updated.phoneNumber ?? "",
+        educationQualification: updated.educationQualification ?? "",
+      });
+      setEditingProfile(false);
       toast.success("Profile updated successfully.");
     } catch (error) {
       if (error instanceof ApiError) {
@@ -138,6 +146,15 @@ export default function ProfilePage() {
     } finally {
       setSavingProfile(false);
     }
+  }
+
+  function cancelProfileEdit() {
+    setProfileForm({
+      personalEmailAddress: profile?.personalEmailAddress ?? "",
+      phoneNumber: profile?.phoneNumber ?? "",
+      educationQualification: profile?.educationQualification ?? "",
+    });
+    setEditingProfile(false);
   }
 
   function startEditBank() {
@@ -232,83 +249,96 @@ export default function ProfilePage() {
               <Spinner className="h-6 w-6" />
             </div>
         ) : activeTab === "personal" ? (
-            <div className="grid gap-4 lg:grid-cols-3">
-              <Card className="lg:col-span-1">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                      <ShieldCheck className="h-4 w-4" />
-                    </span>
-                    Account Overview
-                  </CardTitle>
-                  <CardDescription>Read-only details managed by HR/Admin.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm">
-                  <div>
-                    <div className="text-xs uppercase tracking-wide text-zinc-500">Full Name</div>
-                    <div className="font-medium text-zinc-900">{profile?.fullName}</div>
+            <div className="space-y-5">
+              <Card className="overflow-hidden border-0 shadow-lg shadow-blue-100/70">
+                <div className="bg-gradient-to-r from-blue-700 via-indigo-600 to-cyan-600 px-6 py-7 text-white sm:px-8">
+                  <div className="flex flex-wrap items-center gap-5">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/30 shadow-inner">
+                      <UserRound className="h-8 w-8" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-blue-100">Personal profile</p>
+                      <h2 className="mt-1 truncate text-2xl font-semibold">{profile?.fullName || "Your profile"}</h2>
+                      <p className="mt-1 text-sm text-blue-100">{profile?.designation || "Employee"}</p>
+                    </div>
+                    <div className="rounded-xl border border-white/25 bg-white/10 px-4 py-2.5 backdrop-blur-sm">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-100">Employee ID</p>
+                      <p className="mt-1 font-semibold">{profile?.employeeId || "Pending"}</p>
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-xs uppercase tracking-wide text-zinc-500">Username</div>
-                    <div className="font-medium text-zinc-900">{profile?.username}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs uppercase tracking-wide text-zinc-500">Employee ID</div>
-                    <div className="font-medium text-zinc-900">{profile?.employeeId || "Employee ID pending"}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs uppercase tracking-wide text-zinc-500">Work Email</div>
-                    <div className="font-medium text-zinc-900">{profile?.email}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs uppercase tracking-wide text-zinc-500">Designation</div>
-                    <div className="font-medium text-zinc-900">{profile?.designation}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs uppercase tracking-wide text-zinc-500">Reporting Manager</div>
-                    <div className="font-medium text-zinc-900">{profile?.reportingManagerFullName ?? "-"}</div>
-                  </div>
+                </div>
+                <CardContent className="grid gap-4 bg-white p-5 sm:grid-cols-2 lg:grid-cols-3 sm:p-6">
+                  <OverviewItem label="Username" value={profile?.username} />
+                  <OverviewItem label="Work email" value={profile?.email} />
+                  <OverviewItem label="Reporting manager" value={profile?.reportingManagerFullName} />
                 </CardContent>
               </Card>
 
-              <Card className="border-blue-100 shadow-md shadow-blue-100/40 lg:col-span-2">
-                <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
-                  <CardTitle className="flex items-center gap-2 text-white">
-                    <BadgeCheck className="h-4 w-4" />
-                    Editable Information
-                  </CardTitle>
-                  <CardDescription className="text-blue-100">
-                    Update your personal email, phone number, and education details.
-                  </CardDescription>
+              <Card className="border-zinc-200 shadow-md shadow-zinc-200/50">
+                <CardHeader className="flex flex-row items-center justify-between gap-4 border-b border-zinc-100 bg-gradient-to-r from-slate-50 to-blue-50/70">
+                  <div>
+                    <CardTitle className="flex items-center gap-2 text-zinc-900">
+                      <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
+                        <BadgeCheck className="h-4 w-4" />
+                      </span>
+                      Personal details
+                    </CardTitle>
+                    <CardDescription className="mt-1">
+                      {editingProfile ? "Update the details you’re allowed to manage." : "Your contact and education information."}
+                    </CardDescription>
+                  </div>
+                  {!editingProfile ? (
+                    <Button className="shrink-0 gap-2" onClick={() => setEditingProfile(true)} variant="outline">
+                      <Pencil className="h-4 w-4" />
+                      Edit details
+                    </Button>
+                  ) : null}
                 </CardHeader>
-                <CardContent className="pt-5">
-                  <form className="grid gap-4 sm:grid-cols-2" onSubmit={handleProfileSubmit}>
-                    <FixedInputField
-                        label="Personal Email Address"
-                        onChange={(event) => setProfileForm((prev) => ({ ...prev, personalEmailAddress: event.target.value }))}
-                        type="email"
-                        value={profileForm.personalEmailAddress}
-                        wrapperClassName="sm:col-span-1"
-                    />
-                    <FixedInputField
-                        label="Phone Number"
-                        onChange={(event) => setProfileForm((prev) => ({ ...prev, phoneNumber: event.target.value }))}
-                        type="tel"
-                        value={profileForm.phoneNumber}
-                        wrapperClassName="sm:col-span-1"
-                    />
-                    <FixedInputField
-                        label="Education Details"
-                        onChange={(event) => setProfileForm((prev) => ({ ...prev, educationQualification: event.target.value }))}
-                        value={profileForm.educationQualification}
-                        wrapperClassName="sm:col-span-2"
-                    />
-                    <div className="sm:col-span-2">
-                      <Button disabled={savingProfile} type="submit">
-                        {savingProfile ? "Saving..." : "Save Changes"}
-                      </Button>
+                <CardContent className="p-5 sm:p-6">
+                  {editingProfile ? (
+                    <form className="grid gap-4 sm:grid-cols-2" onSubmit={handleProfileSubmit}>
+                      <FixedInputField
+                          autoComplete="email"
+                          label="Personal email address"
+                          onChange={(event) => setProfileForm((prev) => ({ ...prev, personalEmailAddress: event.target.value }))}
+                          type="email"
+                          value={profileForm.personalEmailAddress}
+                      />
+                      <FixedInputField
+                          autoComplete="tel"
+                          label="Phone number"
+                          onChange={(event) => setProfileForm((prev) => ({ ...prev, phoneNumber: event.target.value }))}
+                          type="tel"
+                          value={profileForm.phoneNumber}
+                      />
+                      <FixedInputField
+                          label="Education details"
+                          onChange={(event) => setProfileForm((prev) => ({ ...prev, educationQualification: event.target.value }))}
+                          value={profileForm.educationQualification}
+                          wrapperClassName="sm:col-span-2"
+                      />
+                      <div className="flex flex-wrap gap-2 sm:col-span-2">
+                        <Button className="gap-2" disabled={savingProfile} type="submit">
+                          <Check className="h-4 w-4" />
+                          {savingProfile ? "Saving..." : "Save changes"}
+                        </Button>
+                        <Button className="gap-2" disabled={savingProfile} onClick={cancelProfileEdit} type="button" variant="outline">
+                          <X className="h-4 w-4" />
+                          Cancel
+                        </Button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      <PersonalDetail icon={<Mail className="h-4 w-4" />} label="Personal email address" value={profile?.personalEmailAddress} />
+                      <PersonalDetail icon={<Phone className="h-4 w-4" />} label="Phone number" value={profile?.phoneNumber} />
+                      <PersonalDetail icon={<GraduationCap className="h-4 w-4" />} label="Education details" value={profile?.educationQualification} />
                     </div>
-                  </form>
+                  )}
+                  <div className="mt-5 flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50/70 px-3.5 py-3 text-xs leading-relaxed text-blue-800">
+                    <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+                    Name, work email, designation, and reporting details are managed by HR/Admin.
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -429,5 +459,26 @@ export default function ProfilePage() {
             </Card>
         )}
       </>
+  );
+}
+
+function OverviewItem({ label, value }: { label: string; value?: string | null }) {
+  return (
+      <div className="min-w-0 rounded-xl border border-zinc-100 bg-zinc-50/70 px-4 py-3">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">{label}</p>
+        <p className="mt-1 truncate text-sm font-medium text-zinc-900">{value || "Not provided"}</p>
+      </div>
+  );
+}
+
+function PersonalDetail({ icon, label, value }: { icon: ReactNode; label: string; value?: string | null }) {
+  return (
+      <div className="min-w-0 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm shadow-zinc-100">
+        <div className="flex items-center gap-2 text-blue-700">
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">{icon}</span>
+          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
+        </div>
+        <p className="mt-3 break-words text-sm font-medium text-zinc-900">{value || "Not added yet"}</p>
+      </div>
   );
 }
