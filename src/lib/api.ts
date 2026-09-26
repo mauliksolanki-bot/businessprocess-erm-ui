@@ -1919,6 +1919,24 @@ export async function getSupportTicketById(accessToken: string, ticketId: number
   });
 }
 
+export async function getGithubMasterDataTickets(accessToken: string) {
+  return request<SupportTicket[]>("/api/support/tickets/github-master-data", {
+    headers: {
+      Authorization: "Bearer " + accessToken,
+    },
+    cache: "no-store",
+  });
+}
+
+export async function getGithubMasterDataTicketById(accessToken: string, ticketId: number) {
+  return request<SupportTicket>(`/api/support/tickets/github-master-data/${ticketId}`, {
+    headers: {
+      Authorization: "Bearer " + accessToken,
+    },
+    cache: "no-store",
+  });
+}
+
 export async function getSupportTicketByNumber(accessToken: string, ticketNumber: string) {
   return request<SupportTicket>(`/api/support/tickets/number/${encodeURIComponent(ticketNumber)}`, {
     headers: {
