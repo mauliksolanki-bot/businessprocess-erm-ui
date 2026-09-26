@@ -74,18 +74,30 @@ export default function ProfilePage() {
     }
     setLoading(true);
     try {
-      const [profileData, bankData] = await Promise.all([
+      const [profileResult, bankResult] = await Promise.allSettled([
         getCurrentUser(session.accessToken),
         getCurrentUserBankDetails(session.accessToken),
       ]);
+      if (profileResult.status === "rejected") {
+        throw profileResult.reason;
+      }
+
+      const profileData = profileResult.value;
       setProfile(profileData);
       setProfileForm({
         personalEmailAddress: profileData.personalEmailAddress ?? "",
         phoneNumber: profileData.phoneNumber ?? "",
         educationQualification: profileData.educationQualification ?? "",
       });
-      setBankDetails(bankData);
-      setEditingBank(!bankData);
+
+      if (bankResult.status === "fulfilled") {
+        const bankData = bankResult.value;
+        setBankDetails(bankData ?? null);
+        setEditingBank(!bankData);
+      } else {
+        setBankDetails(null);
+        setEditingBank(true);
+      }
     } catch (error) {
       if (error instanceof ApiError) {
         toast.error(error.message || `Unable to load profile (${error.status})`);
@@ -239,6 +251,10 @@ export default function ProfilePage() {
                   <div>
                     <div className="text-xs uppercase tracking-wide text-zinc-500">Username</div>
                     <div className="font-medium text-zinc-900">{profile?.username}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase tracking-wide text-zinc-500">Employee ID</div>
+                    <div className="font-medium text-zinc-900">{profile?.employeeId || "Employee ID pending"}</div>
                   </div>
                   <div>
                     <div className="text-xs uppercase tracking-wide text-zinc-500">Work Email</div>

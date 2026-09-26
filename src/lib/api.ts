@@ -747,7 +747,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     return undefined as T;
   }
 
-  return (await response.json()) as T;
+  const responseBody = await response.text();
+  if (!responseBody.trim()) {
+    return undefined as T;
+  }
+
+  return JSON.parse(responseBody) as T;
 }
 
 export async function login(payload: LoginRequest) {
