@@ -4,14 +4,17 @@ import { type FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
+  BellRing,
   CheckCircle2,
   Eye,
   EyeOff,
   Loader2,
   LockKeyhole,
   LogIn,
+  Info,
   ShieldCheck,
   Sparkles,
+  TriangleAlert,
   Workflow,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -20,7 +23,7 @@ import { ErmLogo } from "@/components/erm/logo";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FloatingInputField } from "@/components/ui/form-fields";
-import { ApiError, login } from "@/lib/api";
+import { ApiError, getActiveNotificationBanners, login, type NotificationBanner } from "@/lib/api";
 import { loadSession, saveSession } from "@/lib/auth-storage";
 
 export default function LoginPage() {
@@ -28,14 +31,38 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [notificationBanners, setNotificationBanners] = useState<NotificationBanner[]>([]);
   const router = useRouter();
 
   useEffect(() => {
+    let isCurrent = true;
     const session = loadSession();
     if (session?.accessToken) {
       router.replace("/dashboard");
     }
+    void getActiveNotificationBanners()
+        .then((banners) => {
+          if (isCurrent) setNotificationBanners(banners);
+        })
+        .catch(() => {
+          if (isCurrent) setNotificationBanners([]);
+        });
+    return () => {
+      isCurrent = false;
+    };
   }, [router]);
+
+  function getBannerStyle(type: NotificationBanner["notificationType"]) {
+    if (type === "Urgent") return "border-rose-500 bg-rose-600 shadow-rose-300/40";
+    if (type === "Low Priority") return "border-amber-500 bg-amber-600 shadow-amber-300/40";
+    return "border-emerald-500 bg-emerald-600 shadow-emerald-300/40";
+  }
+
+  function getBannerIcon(type: NotificationBanner["notificationType"]) {
+    if (type === "Urgent") return TriangleAlert;
+    if (type === "Low Priority") return BellRing;
+    return Info;
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -221,6 +248,36 @@ export default function LoginPage() {
                   </Button>
                 </form>
               </div>
+
+              {notificationBanners.length > 0 ? (
+                  <section aria-label="Active notifications" className="mt-4 space-y-3" aria-live="polite">
+                    {notificationBanners.map((banner) => {
+                      const BannerIcon = getBannerIcon(banner.notificationType);
+                      return (
+                          <article
+                              className={`relative overflow-hidden rounded-2xl border px-4 py-4 text-white shadow-lg ${getBannerStyle(banner.notificationType)}`}
+                              key={banner.id}
+                          >
+                            <div className="pointer-events-none absolute -right-5 -top-8 h-28 w-28 rounded-full border-[18px] border-white/10" />
+                            <div className="relative flex items-start gap-3">
+                              <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20">
+                                <BannerIcon className="h-4 w-4" />
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h2 className="text-sm font-bold tracking-wide">{banner.title}</h2>
+                                  <span className="rounded-full border border-white/25 bg-white/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
+                                    {banner.notificationType}
+                                  </span>
+                                </div>
+                                <p className="mt-1.5 whitespace-pre-wrap text-sm leading-6 text-white">{banner.message}</p>
+                              </div>
+                            </div>
+                          </article>
+                      );
+                    })}
+                  </section>
+              ) : null}
 
               <div className="mt-6 grid gap-3 text-sm text-zinc-600 lg:hidden sm:grid-cols-2">
                 <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3">

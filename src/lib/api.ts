@@ -113,6 +113,19 @@ export type EmployeeDirectReport = {
   employmentStatus: string;
 };
 
+export type NotificationBannerType = "Informational" | "Urgent" | "Low Priority";
+
+export type NotificationBanner = {
+  id: number;
+  title: string;
+  message: string;
+  startDate: string;
+  endDate: string;
+  notificationType: NotificationBannerType;
+  createdByUsername: string;
+  createdAt: string;
+};
+
 export type EmployeePasswordResetResponse = {
   employeeId: number;
   employeeIdCode: string | null;
@@ -1029,6 +1042,35 @@ export async function getEmployeeDirectReports(accessToken: string, employeeId: 
       Authorization: "Bearer " + accessToken,
     },
     cache: "no-store",
+  });
+}
+
+export async function getActiveNotificationBanners() {
+  return request<NotificationBanner[]>("/api/notification-banners/active", {
+    cache: "no-store",
+  });
+}
+
+export async function getNotificationBanners(accessToken: string) {
+  return request<NotificationBanner[]>("/api/notification-banners", {
+    headers: {
+      Authorization: "Bearer " + accessToken,
+    },
+    cache: "no-store",
+  });
+}
+
+export async function createNotificationBanner(
+    accessToken: string,
+    payload: Pick<NotificationBanner, "title" | "message" | "startDate" | "endDate" | "notificationType">
+) {
+  return request<NotificationBanner>("/api/notification-banners", {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + accessToken,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
   });
 }
 
