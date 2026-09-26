@@ -54,9 +54,9 @@ export default function LoginPage() {
   }, [router]);
 
   function getBannerStyle(type: NotificationBanner["notificationType"]) {
-    if (type === "Urgent") return "border-rose-500 bg-gradient-to-br from-rose-600 via-red-600 to-rose-800 shadow-rose-300/40";
-    if (type === "Low Priority") return "border-amber-500 bg-gradient-to-br from-yellow-600 via-amber-600 to-orange-700 shadow-amber-300/40";
-    return "border-emerald-500 bg-gradient-to-br from-emerald-600 via-green-700 to-teal-800 shadow-emerald-300/40";
+    if (type === "Urgent") return "border-rose-800 bg-rose-700 shadow-rose-300/40";
+    if (type === "Low Priority") return "border-amber-800 bg-amber-700 shadow-amber-300/40";
+    return "border-emerald-800 bg-emerald-700 shadow-emerald-300/40";
   }
 
   function getBannerIcon(type: NotificationBanner["notificationType"]) {
@@ -260,7 +260,7 @@ export default function LoginPage() {
                               key={banner.id}
                           >
                             <div className="pointer-events-none absolute -right-10 -top-14 h-48 w-48 rounded-full border-[26px] border-white/10" />
-                            <div className="pointer-events-none absolute -bottom-20 -left-12 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
+                            <div className="pointer-events-none absolute -bottom-20 -left-12 h-40 w-40 rounded-full bg-white/5 blur-2xl" />
                             <div className="relative flex items-start gap-4">
                               <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25 shadow-inner sm:h-14 sm:w-14">
                                 <BannerIcon className="h-6 w-6" />
@@ -273,7 +273,7 @@ export default function LoginPage() {
                                   </span>
                                 </div>
                                 <h2 className="mt-3 text-lg font-bold leading-snug tracking-tight text-white sm:text-xl">{banner.title}</h2>
-                                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/95 sm:text-[15px]">{banner.message}</p>
+                                <p className="mt-2 whitespace-pre-wrap text-sm font-medium leading-6 text-white sm:text-[15px]">{banner.message}</p>
                                 <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-white/20 pt-3 text-xs font-medium text-white/85">
                                   <CalendarDays className="h-4 w-4" />
                                   <span>Visible {new Date(`${banner.startDate}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
