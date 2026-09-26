@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Eye, RefreshCw, Ticket } from "lucide-react";
+import { CheckCircle2, Eye, RefreshCw, Search, Ticket } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 
@@ -11,6 +11,8 @@ import {
   assignSupportTicket,
   getSupportTicketById,
   getSupportTickets,
+  getGithubMasterDataTicketById,
+  getGithubMasterDataTickets,
   searchUserMentions,
   type SupportTicket,
 } from "@/lib/api";
@@ -23,7 +25,7 @@ import { MentionText } from "@/components/ui/mention-text";
 import { Spinner } from "@/components/ui/spinner";
 import TicketForm from "@/components/ui/ticket-form";
 
-type SupportTab = "raise" | "mine" | "assigned";
+type SupportTab = "raise" | "mine" | "assigned" | "ticket-master-data";
 
 function statusTone(status: SupportTicket["status"]) {
   if (["RESOLVED", "CLOSED"].includes(status)) return "border-emerald-200 bg-emerald-50 text-emerald-700";
@@ -78,17 +80,26 @@ function isSupportAssigneeRole(roles: string[]) {
       || normalized.includes("role_it_support_manager");
 }
 
+function isItSupportManager(roles: string[]) {
+  return roles.some((role) => role.toLowerCase().replace(/^role_/, "") === "it support manager");
+}
+
 export default function SupportPage() {
   const session = useMemo(() => loadSession(), []);
   const token = session?.accessToken ?? null;
   const [supportTab, setSupportTab] = useState<SupportTab>("raise");
   const [myTickets, setMyTickets] = useState<SupportTicket[]>([]);
   const [assignedTickets, setAssignedTickets] = useState<SupportTicket[]>([]);
+  const [githubMasterDataTickets, setGithubMasterDataTickets] = useState<SupportTicket[]>([]);
+  const [githubMasterDataSearch, setGithubMasterDataSearch] = useState("");
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
+  const [selectedTicketReadOnly, setSelectedTicketReadOnly] = useState(false);
   const [comment, setComment] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isMasterDataLoading, setIsMasterDataLoading] = useState(false);
 
   const canViewAssignedTickets = useMemo(() => isSupportAssigneeRole(session?.roles ?? []), [session?.roles]);
+  const canViewTicketMasterData = useMemo(() => isItSupportManager(session?.roles ?? []), [session?.roles]);
   const mentionSearch = useCallback(
       async (query: string) => {
         if (!token) return [];
@@ -101,10 +112,15 @@ export default function SupportPage() {
         title: "Support Request",
         subtitle: "Facing an issue? please raise a request / Incident so that team can help you futther",
       }
-      : {
-        title: "Track Support Tickets",
-        subtitle: "You can track your tickets here.",
-      };
+      : supportTab === "ticket-master-data"
+          ? {
+            title: "Ticket Master Data",
+            subtitle: "Review GitHub-linked support tickets and their synced comments in one place.",
+          }
+          : {
+            title: "Track Support Tickets",
+            subtitle: "You can track your tickets here.",
+          };
 
   const loadTickets = useCallback(async () => {
     if (!token) return;
@@ -153,16 +169,61 @@ export default function SupportPage() {
     }
   };
 
+  const refreshGithubMasterData = async () => {
+    if (!token || !canViewTicketMasterData) return;
+    setIsMasterDataLoading(true);
+    try {
+      setGithubMasterDataTickets(await getGithubMasterDataTickets(token));
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 403) {
+        toast.error("Only IT Support Manager users can access Ticket Master Data.");
+      } else {
+        toast.error("Unable to load GitHub tickets.");
+      }
+    } finally {
+      setIsMasterDataLoading(false);
+    }
+  };
+
   const openTicket = async (ticketId: number) => {
     if (!token) return;
     try {
       const ticket = await getSupportTicketById(token, ticketId);
       setSelectedTicket(ticket);
+      setSelectedTicketReadOnly(false);
       setComment("");
     } catch {
       toast.error("Unable to load ticket details.");
     }
   };
+
+  const openGithubMasterDataTicket = async (ticketId: number) => {
+    if (!token || !canViewTicketMasterData) return;
+    try {
+      const ticket = await getGithubMasterDataTicketById(token, ticketId);
+      setSelectedTicket(ticket);
+      setSelectedTicketReadOnly(true);
+      setComment("");
+    } catch {
+      toast.error("Unable to load GitHub ticket details.");
+    }
+  };
+
+  const filteredGithubMasterDataTickets = githubMasterDataTickets.filter((ticket) => {
+    const query = githubMasterDataSearch.trim().toLowerCase();
+    if (!query) return true;
+    return [
+      ticket.ticketNumber,
+      ticket.vendorTicketNumber,
+      ticket.ticketType,
+      ticket.shortDescription,
+      ticket.description,
+      ticket.createdByUsername,
+      ticket.queueTitle,
+      ticket.priorityCode,
+      ticket.status,
+    ].some((value) => value?.toLowerCase().includes(query));
+  });
 
   const handleComment = async () => {
     if (!token || !selectedTicket || !comment.trim()) return;
@@ -220,6 +281,19 @@ export default function SupportPage() {
                       onClick={() => setSupportTab("assigned")}
                   >
                     Assigned Tickets
+                  </Button>
+              ) : null}
+              {canViewTicketMasterData ? (
+                  <Button
+                      variant={supportTab === "ticket-master-data" ? "default" : "ghost"}
+                      className={supportTab === "ticket-master-data" ? "bg-linear-to-r from-cyan-600 to-blue-600 text-white hover:from-cyan-500 hover:to-blue-500" : ""}
+                      onClick={() => {
+                        setSupportTab("ticket-master-data");
+                        void refreshGithubMasterData();
+                      }}
+                  >
+                    <Ticket className="mr-2 h-4 w-4" />
+                    Ticket Master Data
                   </Button>
               ) : null}
             </div>
@@ -356,6 +430,91 @@ export default function SupportPage() {
                   )}
                 </div>
             ) : null}
+
+            {supportTab === "ticket-master-data" && canViewTicketMasterData ? (
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h2 className="text-lg font-semibold text-zinc-900">GitHub tickets</h2>
+                      <p className="text-sm text-zinc-500">View GitHub-linked tickets and their complete activity from the application.</p>
+                    </div>
+                    <Button variant="outline" onClick={() => void refreshGithubMasterData()} disabled={isMasterDataLoading}>
+                      <RefreshCw className={`mr-2 h-4 w-4 ${isMasterDataLoading ? "animate-spin" : ""}`} />
+                      Refresh
+                    </Button>
+                  </div>
+                  <div className="relative max-w-md">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                    <input
+                        aria-label="Search GitHub tickets"
+                        className="h-10 w-full rounded-xl border border-zinc-200 bg-white pl-10 pr-3 text-sm text-zinc-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                        onChange={(event) => setGithubMasterDataSearch(event.target.value)}
+                        placeholder="Search tickets, requester, priority..."
+                        value={githubMasterDataSearch}
+                    />
+                  </div>
+                  {isMasterDataLoading && githubMasterDataTickets.length === 0 ? (
+                      <div className="flex min-h-40 items-center justify-center"><Spinner /></div>
+                  ) : filteredGithubMasterDataTickets.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 p-8 text-center">
+                        <Ticket className="mx-auto h-8 w-8 text-zinc-400" />
+                        <p className="mt-3 text-sm font-medium text-zinc-700">{githubMasterDataSearch ? "No tickets match your search." : "No GitHub tickets found."}</p>
+                        <p className="mt-1 text-xs text-zinc-500">Tickets appear here after they are linked to a GitHub issue.</p>
+                      </div>
+                  ) : (
+                      <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white shadow-sm">
+                        <table className="w-full min-w-[1120px] text-sm">
+                          <thead className="bg-linear-to-r from-indigo-50 via-violet-50 to-cyan-50 text-left text-zinc-800">
+                          <tr>
+                            <th className="px-4 py-3 font-semibold">Ticket / GitHub issue</th>
+                            <th className="px-4 py-3 font-semibold">Summary</th>
+                            <th className="px-4 py-3 font-semibold">Requester</th>
+                            <th className="px-4 py-3 font-semibold">Queue</th>
+                            <th className="px-4 py-3 font-semibold">Priority</th>
+                            <th className="px-4 py-3 font-semibold">Status</th>
+                            <th className="px-4 py-3 font-semibold">Created</th>
+                            <th className="px-4 py-3 text-center font-semibold">Actions</th>
+                          </tr>
+                          </thead>
+                          <tbody>
+                          {filteredGithubMasterDataTickets.map((ticket) => (
+                              <tr key={ticket.id} className="border-t border-zinc-200 transition-colors hover:bg-indigo-50/40">
+                                <td className="px-4 py-3">
+                                  <p className="font-semibold text-blue-700">{ticket.ticketNumber}</p>
+                                  <p className="mt-0.5 text-xs text-zinc-500">GitHub {ticket.vendorTicketNumber ?? "issue"} · {ticket.ticketType.replaceAll("_", " ")}</p>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <p className="max-w-[300px] truncate font-medium text-zinc-800" title={ticket.shortDescription}>{ticket.shortDescription}</p>
+                                  <p className="mt-0.5 max-w-[300px] truncate text-xs text-zinc-500" title={ticket.description}>{ticket.description}</p>
+                                </td>
+                                <td className="px-4 py-3 text-zinc-700">{ticket.createdByUsername || "-"}</td>
+                                <td className="px-4 py-3 text-zinc-700">{ticket.queueTitle ?? ticket.queueCode ?? "-"}</td>
+                                <td className="px-4 py-3"><Badge className="border border-indigo-200 bg-indigo-50 text-indigo-700">{ticket.priorityCode}</Badge></td>
+                                <td className="px-4 py-3"><Badge className={statusTone(ticket.status)}>{ticket.status.replaceAll("_", " ")}</Badge></td>
+                                <td className="px-4 py-3 text-xs text-zinc-600">{new Date(ticket.createdAt).toLocaleString()}</td>
+                                <td className="px-4 py-3">
+                                  <div className="flex justify-center">
+                                    <Button
+                                        aria-label={`View ticket ${ticket.ticketNumber}`}
+                                        className="h-9 w-9 rounded-full border-zinc-200 bg-zinc-50 p-0 text-zinc-700 hover:bg-blue-50 hover:text-blue-700"
+                                        onClick={() => void openGithubMasterDataTicket(ticket.id)}
+                                        size="sm"
+                                        title="View ticket details"
+                                        variant="outline"
+                                    >
+                                      <Eye className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                          ))}
+                          </tbody>
+                        </table>
+                      </div>
+                  )}
+                  <p className="text-xs text-zinc-500">Showing {filteredGithubMasterDataTickets.length} of {githubMasterDataTickets.length} GitHub-linked tickets.</p>
+                </div>
+            ) : null}
           </CardContent>
         </Card>
 
@@ -365,6 +524,7 @@ export default function SupportPage() {
                 onClick={(event) => {
                   if (event.target === event.currentTarget) {
                     setSelectedTicket(null);
+                    setSelectedTicketReadOnly(false);
                   }
                 }}
             >
@@ -378,7 +538,7 @@ export default function SupportPage() {
                       </h3>
                       <p className="mt-1 text-sm text-indigo-100">{selectedTicket.shortDescription}</p>
                     </div>
-                    <Button className="border-white/30 bg-white/10 text-white hover:bg-white/20" onClick={() => setSelectedTicket(null)} variant="outline">
+                    <Button className="border-white/30 bg-white/10 text-white hover:bg-white/20" onClick={() => { setSelectedTicket(null); setSelectedTicketReadOnly(false); }} variant="outline">
                       Close
                     </Button>
                   </div>
@@ -393,6 +553,10 @@ export default function SupportPage() {
                       <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-3 text-sm text-zinc-700">
                         <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Ticket Number</p>
                         <p className="mt-1 font-medium text-zinc-900">{selectedTicket.ticketNumber}</p>
+                      </div>
+                      <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-3 text-sm text-zinc-700">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">GitHub Issue</p>
+                        <p className="mt-1 font-medium text-zinc-900">{selectedTicket.vendorTicketNumber ?? "Not linked"}</p>
                       </div>
                       <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-3 text-sm text-zinc-700">
                         <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Type</p>
@@ -438,6 +602,22 @@ export default function SupportPage() {
                         <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Updated</p>
                         <p className="mt-1 font-medium text-zinc-900">{new Date(selectedTicket.updatedAt).toLocaleString()}</p>
                       </div>
+                      <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-3 text-sm text-zinc-700">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">First Response</p>
+                        <p className="mt-1 font-medium text-zinc-900">{selectedTicket.firstResponseAt ? new Date(selectedTicket.firstResponseAt).toLocaleString() : "-"}</p>
+                      </div>
+                      <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-3 text-sm text-zinc-700">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Response Due</p>
+                        <p className="mt-1 font-medium text-zinc-900">{selectedTicket.responseDueAt ? new Date(selectedTicket.responseDueAt).toLocaleString() : "-"}</p>
+                      </div>
+                      <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-3 text-sm text-zinc-700">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Resolution Due</p>
+                        <p className="mt-1 font-medium text-zinc-900">{selectedTicket.resolutionDueAt ? new Date(selectedTicket.resolutionDueAt).toLocaleString() : "-"}</p>
+                      </div>
+                      <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-3 text-sm text-zinc-700">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Resolved / Closed</p>
+                        <p className="mt-1 font-medium text-zinc-900">{selectedTicket.resolvedAt ? new Date(selectedTicket.resolvedAt).toLocaleString() : selectedTicket.closedAt ? new Date(selectedTicket.closedAt).toLocaleString() : "-"}</p>
+                      </div>
                     </div>
 
                     <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700">
@@ -461,17 +641,19 @@ export default function SupportPage() {
                             ))
                         )}
                       </div>
-                      <div className="mt-3 flex gap-2">
-                        <MentionTextareaField
-                            className="min-h-[72px]"
-                            label="Add a comment"
-                            mentionSearch={mentionSearch}
-                            onChange={setComment}
-                            value={comment}
-                            wrapperClassName="flex-1"
-                        />
-                        <Button onClick={handleComment} disabled={!comment.trim()}>Post</Button>
-                      </div>
+                      {!selectedTicketReadOnly ? (
+                          <div className="mt-3 flex gap-2">
+                            <MentionTextareaField
+                                className="min-h-[72px]"
+                                label="Add a comment"
+                                mentionSearch={mentionSearch}
+                                onChange={setComment}
+                                value={comment}
+                                wrapperClassName="flex-1"
+                            />
+                            <Button onClick={handleComment} disabled={!comment.trim()}>Post</Button>
+                          </div>
+                      ) : null}
                     </div>
                   </div>
                 </div>
