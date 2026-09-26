@@ -369,7 +369,7 @@ export default function EmployeesPage() {
           <CardContent className="pt-6">
             <form className="mb-3 grid gap-3 rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50 via-indigo-50 to-cyan-50 p-4 md:grid-cols-5" onSubmit={handleSearch}>
               <FloatingInputField
-                  label="Employee Name"
+                  label="Employee Name or ID"
                   onChange={(event) => setFilters((value) => ({ ...value, employeeName: event.target.value }))}
                   value={filters.employeeName}
               />
@@ -450,6 +450,7 @@ export default function EmployeesPage() {
                             <tr className="border-t border-zinc-200 hover:bg-blue-50/30" key={employee.id}>
                               <td className="px-4 py-3">
                                 <p className="font-semibold text-zinc-900">{employee.fullName}</p>
+                                <p className="text-xs text-blue-700">{employee.employeeId ?? "Employee ID pending"}</p>
                                 <p className="text-xs text-zinc-500">{employee.email}</p>
                               </td>
                               <td className="px-4 py-3">

@@ -87,6 +87,7 @@ export type Employee = {
   id: number;
   fullName: string;
   username: string;
+  employeeId: string | null;
   email: string;
   roles: string[];
   primaryRoleId: number | null;
