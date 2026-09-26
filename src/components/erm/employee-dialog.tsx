@@ -63,7 +63,7 @@ export function EmployeeDialog({
                                    onSave,
                                }: EmployeeDialogProps) {
     const [form, setForm] = useState<EmployeeEditForm>({
-        employeeId: employee?.username ?? "",
+        employeeId: employee?.employeeId ?? "",
         fullName: employee?.fullName ?? "",
         email: employee?.email ?? "",
         department: employee?.department ?? "",
@@ -127,7 +127,7 @@ export function EmployeeDialog({
                                 <CardContent className="grid gap-4">
                                     <div className="grid gap-4 sm:grid-cols-2">
                                         <InfoTile icon={<UserRound className="h-4 w-4 text-blue-600" />} label="Full name" value={currentEmployee.fullName} />
-                                        <InfoTile icon={<UserRound className="h-4 w-4 text-blue-600" />} label="Employee ID" value={currentEmployee.username} />
+                                        <InfoTile icon={<UserRound className="h-4 w-4 text-blue-600" />} label="Employee ID" value={currentEmployee.employeeId ?? "Employee ID pending"} />
                                         <InfoTile icon={<Mail className="h-4 w-4 text-blue-600" />} label="Email" value={currentEmployee.email} />
                                         <InfoTile icon={<ShieldCheck className="h-4 w-4 text-blue-600" />} label="Department" value={currentEmployee.department} />
                                         <InfoTile icon={<ShieldCheck className="h-4 w-4 text-blue-600" />} label="Status" value={currentEmployee.employmentStatus} />

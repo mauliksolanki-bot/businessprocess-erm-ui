@@ -14,6 +14,7 @@ export type LoginResponse = {
 export type UserProfile = {
   id: number;
   username: string;
+  employeeId: string | null;
   email: string;
   fullName: string;
   designation: string;

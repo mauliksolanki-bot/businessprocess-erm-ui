@@ -81,6 +81,7 @@ export function ProtectedShell({ children }: ProtectedShellProps) {
     setSessionUser({
       id: 0,
       username: session.username,
+      employeeId: null,
       email: "",
       fullName: session.username,
       designation: "",

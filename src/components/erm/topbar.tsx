@@ -288,6 +288,7 @@ export function Topbar({ user, onLogout, notifications, notificationError }: Top
 
                     <div className="mt-3 space-y-3 text-sm">
                       <DetailRow label="Full name" value={user.fullName || "-"} />
+                      <DetailRow label="Employee ID" value={user.employeeId || "Employee ID pending"} />
                       <DetailRow label="Username" value={user.username} />
                       <DetailRow label="Email" value={user.email} />
                       <DetailRow label="Designation" value={user.designation || "-"} />
