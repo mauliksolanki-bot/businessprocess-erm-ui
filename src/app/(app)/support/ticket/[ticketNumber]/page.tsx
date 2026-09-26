@@ -483,7 +483,9 @@ export default function SupportTicketDetailsPage() {
                         <div key={item.id} className="rounded-md border border-zinc-100 bg-white p-3 text-sm">
                           <div className="flex items-center justify-between">
                             <span className="font-medium text-zinc-800">
-                              {item.actorUsername}
+                              {item.actionType.startsWith("GITHUB_COMMENT")
+                                ? ticket.assigneeFullName ?? ticket.assigneeUsername ?? "Unassigned"
+                                : item.actorUsername}
                               {item.actionType && item.actionType !== "COMMENT" && item.actionType !== "STATUS_CHANGE" ? (
                                 <span className={`ml-2 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${activityTone(item.actionType)}`}>
                                   {item.actionType.replaceAll("_", " ")}
