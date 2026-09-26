@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
-import { BadgeCheck, Check, GraduationCap, Landmark, Lock, Mail, Pencil, Phone, ShieldCheck, User, UserRound, X } from "lucide-react";
+import { BadgeCheck, BriefcaseBusiness, CalendarDays, Check, GraduationCap, Landmark, Lock, Mail, Pencil, Phone, ShieldCheck, User, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/erm/page-header";
@@ -52,6 +52,13 @@ const emptyBankForm: BankForm = {
   branchName: "",
   accountType: "SAVINGS",
 };
+
+function formatProfileDate(value?: string | null) {
+  if (!value) return "—";
+  const date = new Date(`${value.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(date);
+}
 
 export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<"personal" | "bank">("personal");
@@ -271,6 +278,79 @@ export default function ProfilePage() {
                   <OverviewItem label="Username" value={profile?.username} />
                   <OverviewItem label="Work email" value={profile?.email} />
                   <OverviewItem label="Reporting manager" value={profile?.reportingManagerFullName} />
+                  <OverviewItem label="Department" value={profile?.department} />
+                  <OverviewItem label="Joined date" value={formatProfileDate(profile?.joinedDate)} />
+                  <div className="min-w-0 rounded-xl border border-zinc-100 bg-zinc-50/70 px-4 py-3 sm:col-span-2 lg:col-span-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Assigned roles</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {profile?.roles.length ? profile.roles.map((role) => (
+                        <span className="rounded-full border border-indigo-100 bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700" key={role}>{role}</span>
+                      )) : <span className="text-sm font-medium text-zinc-500">No roles assigned</span>}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-indigo-100 shadow-md shadow-indigo-100/50">
+                <CardHeader className="border-b border-indigo-100 bg-gradient-to-r from-indigo-50 via-white to-blue-50">
+                  <CardTitle className="flex items-center gap-2 text-zinc-900">
+                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700">
+                      <BriefcaseBusiness className="h-4 w-4" />
+                    </span>
+                    Current project assignments
+                  </CardTitle>
+                  <CardDescription>Active projects, allocation type, percentage, and assignment dates.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-5 sm:p-6">
+                  {profile?.currentProjects.length ? (
+                    <div className="grid gap-4 xl:grid-cols-2">
+                      {profile.currentProjects.map((project) => (
+                        <article className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm transition hover:border-indigo-200 hover:shadow-md" key={project.allocationId}>
+                          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-zinc-100 bg-gradient-to-r from-white to-indigo-50/60 px-4 py-4">
+                            <div className="min-w-0">
+                              <h3 className="truncate font-semibold text-zinc-900">{project.projectName}</h3>
+                              <p className="mt-1 text-xs font-medium tracking-wide text-zinc-500">{project.projectCode} <span className="px-1 text-zinc-300">·</span> {project.allocationCode}</p>
+                            </div>
+                            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">{project.status}</span>
+                          </div>
+                          <div className="grid gap-3 p-4 sm:grid-cols-3">
+                            <ProjectAssignmentDetail
+                                icon={<CalendarDays className="h-4 w-4" />}
+                                label="Assigned start"
+                                value={formatProfileDate(project.startDate)}
+                            />
+                            <ProjectAssignmentDetail
+                                icon={<CalendarDays className="h-4 w-4" />}
+                                label="Assigned end"
+                                value={formatProfileDate(project.endDate)}
+                            />
+                            <ProjectAssignmentDetail
+                                icon={<BriefcaseBusiness className="h-4 w-4" />}
+                                label="Allocation type"
+                                value={project.allocationType}
+                            />
+                          </div>
+                          <div className="px-4 pb-4">
+                            <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+                              <span className="font-medium text-zinc-600">Allocation percentage</span>
+                              <span className="font-semibold tabular-nums text-indigo-700">{new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(project.allocationPercent)}%</span>
+                            </div>
+                            <div aria-label={`${project.allocationPercent}% allocation`} className="h-2 overflow-hidden rounded-full bg-indigo-100">
+                              <div className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-600" style={{ width: `${Math.min(100, Math.max(0, project.allocationPercent))}%` }} />
+                            </div>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50/70 px-6 py-10 text-center">
+                      <span className="mx-auto inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-indigo-600 shadow-sm ring-1 ring-zinc-200">
+                        <BriefcaseBusiness className="h-5 w-5" />
+                      </span>
+                      <p className="mt-3 text-sm font-semibold text-zinc-800">No active project assignments</p>
+                      <p className="mt-1 text-xs text-zinc-500">Your current assignments will appear here.</p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -479,6 +559,18 @@ function PersonalDetail({ icon, label, value }: { icon: ReactNode; label: string
           <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
         </div>
         <p className="mt-3 break-words text-sm font-medium text-zinc-900">{value || "Not added yet"}</p>
+      </div>
+  );
+}
+
+function ProjectAssignmentDetail({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+  return (
+      <div className="min-w-0 rounded-xl bg-zinc-50 px-3 py-2.5">
+        <div className="flex items-center gap-1.5 text-indigo-600">
+          {icon}
+          <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
+        </div>
+        <p className="mt-1.5 truncate text-sm font-semibold text-zinc-900">{value}</p>
       </div>
   );
 }
