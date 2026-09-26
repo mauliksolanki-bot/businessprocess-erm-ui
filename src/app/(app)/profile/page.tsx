@@ -741,13 +741,13 @@ function TeamMemberDetailsModal({
       <div
           aria-label={loading ? "Loading team member details" : `${member?.fullName ?? "Team member"} details`}
           aria-modal="true"
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/55 p-3 backdrop-blur-sm sm:p-6"
+          className="fixed inset-0 z-[70] flex items-stretch justify-end bg-slate-950/45 backdrop-blur-sm"
           onClick={(event) => {
             if (event.target === event.currentTarget) onClose();
           }}
           role="dialog"
       >
-        <div className="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-white/60 bg-white shadow-2xl shadow-slate-950/30">
+        <div className="ml-auto flex h-full w-full max-w-4xl flex-col overflow-hidden rounded-l-3xl border-l border-white/60 bg-white shadow-2xl shadow-slate-950/30">
           {loading || !member ? (
             <div className="flex min-h-64 items-center justify-center"><Spinner className="h-7 w-7" /></div>
           ) : (
