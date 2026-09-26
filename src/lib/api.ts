@@ -17,7 +17,9 @@ export type UserProfile = {
   employeeId: string | null;
   email: string;
   fullName: string;
+  department: string;
   designation: string;
+  joinedDate: string | null;
   reportingManagerFullName: string | null;
   reportingManagerRoleName: string | null;
   roles: string[];
