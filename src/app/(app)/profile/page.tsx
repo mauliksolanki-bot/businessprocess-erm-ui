@@ -64,6 +64,10 @@ function formatProfileDate(value?: string | null) {
   return new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(date);
 }
 
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
 export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<"personal" | "team" | "bank">("personal");
   const [loading, setLoading] = useState(true);
@@ -523,42 +527,50 @@ export default function ProfilePage() {
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-[760px] text-left text-sm">
-                      <thead className="bg-zinc-50 text-[11px] uppercase tracking-wide text-zinc-500">
+                    <table className="w-full min-w-[760px] text-sm">
+                      <thead className="bg-gradient-to-r from-indigo-50 via-violet-50 to-cyan-50 text-left text-zinc-800">
                         <tr>
-                          <th className="px-5 py-3 font-semibold">Team member</th>
-                          <th className="px-5 py-3 font-semibold">Employee ID</th>
-                          <th className="px-5 py-3 font-semibold">Designation</th>
-                          <th className="px-5 py-3 font-semibold">Department</th>
-                          <th className="px-5 py-3 font-semibold">Status</th>
-                          <th className="px-5 py-3 text-right font-semibold">Details</th>
+                          <th className="px-4 py-3 font-medium">Employee</th>
+                          <th className="px-4 py-3 font-medium">Roles</th>
+                          <th className="px-4 py-3 font-medium">Department</th>
+                          <th className="px-4 py-3 font-medium">Status</th>
+                          <th className="px-4 py-3 font-medium">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-zinc-100">
+                      <tbody>
                         {teamMembers.map((member) => (
-                          <tr className="transition hover:bg-blue-50/40" key={member.id}>
-                            <td className="px-5 py-4">
+                          <tr className="border-t border-zinc-200 hover:bg-blue-50/30" key={member.id}>
+                            <td className="px-4 py-3">
                               <p className="font-semibold text-zinc-900">{member.fullName}</p>
-                              <p className="mt-0.5 text-xs text-zinc-500">{member.email}</p>
+                              <p className="text-xs text-blue-700">{member.employeeId ?? "Employee ID pending"}</p>
+                              <p className="text-xs text-zinc-500">{member.email}</p>
                             </td>
-                            <td className="px-5 py-4 font-medium text-zinc-700">{member.employeeId || "—"}</td>
-                            <td className="px-5 py-4 text-zinc-700">{member.designation}</td>
-                            <td className="px-5 py-4 text-zinc-700">{member.department}</td>
-                            <td className="px-5 py-4">
-                              <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${member.employmentStatus.toLowerCase() === "active" ? "bg-emerald-50 text-emerald-700" : "bg-zinc-100 text-zinc-600"}`}>
+                            <td className="px-4 py-3">
+                              <div className="flex flex-wrap gap-1.5">
+                                {member.roles.map((role) => (
+                                  <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-xs text-blue-700" key={role}>{role}</span>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-zinc-700">{member.department}</td>
+                            <td className="px-4 py-3">
+                              <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${member.employmentStatus.toLowerCase() === "active" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
                                 {member.employmentStatus}
                               </span>
                             </td>
-                            <td className="px-5 py-4 text-right">
+                            <td className="px-4 py-3">
+                              <div className="flex gap-2">
                               <Button
                                   aria-label={`View ${member.fullName} details`}
-                                  className="h-9 w-9 border-blue-100 p-0 text-blue-700 hover:bg-blue-50"
+                                  className="h-9 w-9 rounded-full border-sky-200 bg-sky-50 p-0 text-sky-700 hover:bg-sky-100"
                                   onClick={() => void openTeamMemberDetails(member.id)}
                                   title="View team member details"
                                   variant="outline"
+                                  size="sm"
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -728,6 +740,18 @@ function ProjectAssignmentDetail({ icon, label, value }: { icon: ReactNode; labe
   );
 }
 
+function TeamMemberInfoTile({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+  return (
+      <div className="min-w-0 rounded-2xl bg-white/80 p-4">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+          {icon}
+          {label}
+        </div>
+        <p className="mt-2 break-words text-sm font-medium leading-6 text-zinc-900">{value}</p>
+      </div>
+  );
+}
+
 function TeamMemberDetailsModal({
   member,
   loading,
@@ -741,82 +765,94 @@ function TeamMemberDetailsModal({
       <div
           aria-label={loading ? "Loading team member details" : `${member?.fullName ?? "Team member"} details`}
           aria-modal="true"
-          className="fixed inset-0 z-[70] flex items-stretch justify-end bg-slate-950/45 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-stretch justify-end bg-slate-950/45 backdrop-blur-sm"
           onClick={(event) => {
             if (event.target === event.currentTarget) onClose();
           }}
           role="dialog"
       >
-        <div className="ml-auto flex h-full w-full max-w-4xl flex-col overflow-hidden rounded-l-3xl border-l border-white/60 bg-white shadow-2xl shadow-slate-950/30">
+        <div className="ml-auto flex h-full w-full max-w-3xl flex-col overflow-hidden border-l border-white/50 bg-white shadow-2xl shadow-slate-900/20">
           {loading || !member ? (
             <div className="flex min-h-64 items-center justify-center"><Spinner className="h-7 w-7" /></div>
           ) : (
             <>
-              <div className="flex items-start justify-between gap-4 bg-gradient-to-r from-blue-700 via-indigo-600 to-cyan-600 px-5 py-5 text-white sm:px-7">
-                <div className="flex min-w-0 items-center gap-4">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/30">
-                    <UserRound className="h-6 w-6" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-blue-100">Team member profile</p>
-                    <h2 className="mt-1 truncate text-xl font-semibold sm:text-2xl">{member.fullName}</h2>
-                    <p className="mt-1 text-sm text-blue-100">{member.designation} <span className="px-1">·</span> {member.employeeId || "Employee ID pending"}</p>
-                  </div>
+              <div className="flex items-start justify-between border-b border-zinc-200 bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-500 px-5 py-4 text-white sm:px-6 sm:py-5">
+                <div className="min-w-0 pr-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-100">Employee profile</p>
+                  <h2 className="mt-1 break-words text-xl font-semibold sm:text-2xl">{member.fullName}</h2>
+                  <p className="mt-1 break-words text-sm text-blue-100">{member.department} · {member.employeeId || "Employee ID pending"}</p>
                 </div>
-                <Button aria-label="Close team member details" className="h-9 w-9 shrink-0 border-white/30 p-0 text-white hover:bg-white/15" onClick={onClose} variant="outline">
-                  <X className="h-4 w-4" />
-                </Button>
+                <div className="flex shrink-0 items-start gap-3">
+                  <div className="hidden text-right sm:block">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-100">Last updated</p>
+                    <p className="mt-1 text-sm font-medium text-white">{formatDateTime(member.updatedAt)}</p>
+                  </div>
+                  <Button aria-label="Close team member details" className="h-9 w-9 shrink-0 rounded-full border-white/50 bg-white/10 p-0 text-white hover:bg-white/20" onClick={onClose} size="sm" variant="outline">
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
 
-              <div className="min-h-0 space-y-6 overflow-y-auto p-5 sm:p-7">
-                <section>
-                  <h3 className="mb-3 text-sm font-semibold text-zinc-900">Employee information</h3>
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    <OverviewItem label="Full name" value={member.fullName} />
-                    <OverviewItem label="Employee ID" value={member.employeeId} />
-                    <OverviewItem label="Username" value={member.username} />
-                    <OverviewItem label="Work email" value={member.email} />
-                    <OverviewItem label="Personal email" value={member.personalEmailAddress} />
-                    <OverviewItem label="Phone number" value={member.phoneNumber} />
-                    <OverviewItem label="Department" value={member.department} />
-                    <OverviewItem label="Designation" value={member.designation} />
-                    <OverviewItem label="Employment status" value={member.employmentStatus} />
-                    <OverviewItem label="Joined date" value={formatProfileDate(member.joinedDate)} />
-                    <OverviewItem label="Reporting manager" value={member.reportingManagerFullName} />
-                    <OverviewItem label="Manager role" value={member.reportingManagerRoleName} />
-                    <div className="rounded-xl border border-zinc-100 bg-zinc-50/70 px-4 py-3 sm:col-span-2 lg:col-span-3">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Education details</p>
-                      <p className="mt-1 break-words text-sm font-medium text-zinc-900">{member.educationQualification || "Not provided"}</p>
+              <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5 sm:p-6">
+                <Card className="border-0 bg-gradient-to-br from-blue-50 via-white to-indigo-50 shadow-none">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-zinc-900">
+                      <UserRound className="h-5 w-5 text-blue-600" />
+                      Employee summary
+                    </CardTitle>
+                    <CardDescription>Profile, role, and reporting details for this team member.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid gap-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <TeamMemberInfoTile icon={<UserRound className="h-4 w-4 text-blue-600" />} label="Full name" value={member.fullName} />
+                      <TeamMemberInfoTile icon={<UserRound className="h-4 w-4 text-blue-600" />} label="Employee ID" value={member.employeeId || "Employee ID pending"} />
+                      <TeamMemberInfoTile icon={<UserRound className="h-4 w-4 text-blue-600" />} label="Username" value={member.username} />
+                      <TeamMemberInfoTile icon={<Mail className="h-4 w-4 text-blue-600" />} label="Work email" value={member.email} />
+                      <TeamMemberInfoTile icon={<Mail className="h-4 w-4 text-blue-600" />} label="Personal email" value={member.personalEmailAddress || "-"} />
+                      <TeamMemberInfoTile icon={<Phone className="h-4 w-4 text-blue-600" />} label="Phone number" value={member.phoneNumber || "-"} />
+                      <TeamMemberInfoTile icon={<ShieldCheck className="h-4 w-4 text-blue-600" />} label="Department" value={member.department} />
+                      <TeamMemberInfoTile icon={<ShieldCheck className="h-4 w-4 text-blue-600" />} label="Status" value={member.employmentStatus} />
+                      <TeamMemberInfoTile icon={<ShieldCheck className="h-4 w-4 text-blue-600" />} label="Designation" value={member.designation} />
+                      <TeamMemberInfoTile icon={<CalendarDays className="h-4 w-4 text-blue-600" />} label="Joined" value={formatProfileDate(member.joinedDate)} />
+                      <TeamMemberInfoTile icon={<UserRound className="h-4 w-4 text-blue-600" />} label="Reporting manager" value={member.reportingManagerFullName} />
+                      <TeamMemberInfoTile icon={<ShieldCheck className="h-4 w-4 text-blue-600" />} label="Manager role" value={member.reportingManagerRoleName || "-"} />
                     </div>
-                  </div>
-                </section>
+                    <div className="rounded-2xl bg-white/80 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Education details</p>
+                      <p className="mt-2 break-words text-sm font-medium leading-6 text-zinc-900">{member.educationQualification || "-"}</p>
+                    </div>
+                    <div>
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Assigned roles</p>
+                      <div className="flex flex-wrap gap-2">
+                        {member.roles.length ? member.roles.map((role) => (
+                          <span className="rounded-full border border-blue-200 bg-white px-3 py-1 text-xs font-medium text-blue-700" key={role}>{role}</span>
+                        )) : <span className="text-sm text-zinc-500">No roles assigned</span>}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
 
-                <section>
-                  <h3 className="mb-3 text-sm font-semibold text-zinc-900">Assigned roles</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {member.roles.length ? member.roles.map((role) => (
-                      <span className="rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700" key={role}>{role}</span>
-                    )) : <span className="text-sm text-zinc-500">No roles assigned</span>}
-                  </div>
-                </section>
-
-                <section>
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold text-zinc-900">Current project assignments</h3>
-                    <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">{member.currentProjects.length} active</span>
-                  </div>
+                <Card className="border-zinc-200 shadow-none">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-zinc-900">
+                      <BriefcaseBusiness className="h-5 w-5 text-blue-600" />
+                      Current project assignments
+                    </CardTitle>
+                    <CardDescription>Active project allocation details for this employee.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid gap-4">
                   {member.currentProjects.length ? (
                     <div className="grid gap-3 lg:grid-cols-2">
                       {member.currentProjects.map((project) => (
                         <article className="overflow-hidden rounded-2xl border border-zinc-200 bg-white" key={project.allocationId}>
-                          <div className="flex items-start justify-between gap-3 border-b border-zinc-100 bg-gradient-to-r from-white to-indigo-50/60 px-4 py-3.5">
+                          <div className="flex items-start justify-between gap-3 border-b border-zinc-100 bg-gradient-to-r from-blue-50/70 to-indigo-50/50 px-4 py-3.5">
                             <div className="min-w-0">
                               <p className="truncate text-sm font-semibold text-zinc-900">{project.projectName}</p>
                               <p className="mt-1 text-xs text-zinc-500">{project.projectCode} <span className="px-1 text-zinc-300">·</span> {project.allocationCode}</p>
                             </div>
                             <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">{project.status}</span>
                           </div>
-                          <div className="grid gap-2 p-3 sm:grid-cols-3">
+                          <div className="grid gap-2 p-3 sm:grid-cols-2">
                             <ProjectAssignmentDetail icon={<CalendarDays className="h-4 w-4" />} label="Start date" value={formatProfileDate(project.startDate)} />
                             <ProjectAssignmentDetail icon={<CalendarDays className="h-4 w-4" />} label="End date" value={formatProfileDate(project.endDate)} />
                             <ProjectAssignmentDetail icon={<BriefcaseBusiness className="h-4 w-4" />} label="Allocation type" value={project.allocationType} />
@@ -836,7 +872,8 @@ function TeamMemberDetailsModal({
                   ) : (
                     <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-8 text-center text-sm text-zinc-500">No active project assignments.</div>
                   )}
-                </section>
+                  </CardContent>
+                </Card>
               </div>
             </>
           )}
