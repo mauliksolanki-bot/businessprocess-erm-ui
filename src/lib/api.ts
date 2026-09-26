@@ -123,6 +123,7 @@ export type NotificationBanner = {
   endDate: string;
   notificationType: NotificationBannerType;
   createdByUsername: string;
+  active: boolean;
   createdAt: string;
 };
 
@@ -1071,6 +1072,30 @@ export async function createNotificationBanner(
       "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
+  });
+}
+
+export async function updateNotificationBanner(
+    accessToken: string,
+    bannerId: number,
+    payload: Pick<NotificationBanner, "title" | "message" | "startDate" | "endDate" | "notificationType">
+) {
+  return request<NotificationBanner>(`/api/notification-banners/${bannerId}`, {
+    method: "PUT",
+    headers: {
+      Authorization: "Bearer " + accessToken,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function inactivateNotificationBanner(accessToken: string, bannerId: number) {
+  return request<NotificationBanner>(`/api/notification-banners/${bannerId}/inactive`, {
+    method: "PATCH",
+    headers: {
+      Authorization: "Bearer " + accessToken,
+    },
   });
 }
 

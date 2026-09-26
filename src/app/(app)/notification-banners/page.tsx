@@ -1,7 +1,7 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { BellRing, CalendarDays, Megaphone, Plus, RefreshCw, ShieldAlert } from "lucide-react";
+import { Ban, BellRing, CalendarDays, CheckCircle2, Megaphone, PencilLine, Plus, RefreshCw, ShieldAlert, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -12,8 +12,10 @@ import {
   ApiError,
   createNotificationBanner,
   getNotificationBanners,
+  inactivateNotificationBanner,
   type NotificationBanner,
   type NotificationBannerType,
+  updateNotificationBanner,
 } from "@/lib/api";
 import { loadSession } from "@/lib/auth-storage";
 
@@ -32,6 +34,7 @@ function bannerTone(type: NotificationBannerType) {
 }
 
 function getBannerState(banner: NotificationBanner) {
+  if (!banner.active) return { label: "Inactive", className: "border-rose-200 bg-rose-50 text-rose-700" };
   const today = todayInputValue();
   if (today < banner.startDate) return { label: "Scheduled", className: "border-blue-200 bg-blue-50 text-blue-700" };
   if (today > banner.endDate) return { label: "Expired", className: "border-zinc-200 bg-zinc-100 text-zinc-600" };
@@ -53,6 +56,15 @@ export default function NotificationBannersPage() {
   const [startDate, setStartDate] = useState(todayInputValue);
   const [endDate, setEndDate] = useState("");
   const [notificationType, setNotificationType] = useState<NotificationBannerType>("Informational");
+  const [editingBanner, setEditingBanner] = useState<NotificationBanner | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editMessage, setEditMessage] = useState("");
+  const [editStartDate, setEditStartDate] = useState("");
+  const [editEndDate, setEditEndDate] = useState("");
+  const [editNotificationType, setEditNotificationType] = useState<NotificationBannerType>("Informational");
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [bannerToInactivate, setBannerToInactivate] = useState<NotificationBanner | null>(null);
+  const [isInactivating, setIsInactivating] = useState(false);
 
   const loadBanners = useCallback(async () => {
     if (!token || !canManage) {
@@ -108,6 +120,69 @@ export default function NotificationBannersPage() {
       }
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  function ownsBanner(banner: NotificationBanner) {
+    return canManage && session?.username?.toLowerCase() === banner.createdByUsername.toLowerCase();
+  }
+
+  function openEditDrawer(banner: NotificationBanner) {
+    setEditingBanner(banner);
+    setEditTitle(banner.title);
+    setEditMessage(banner.message);
+    setEditStartDate(banner.startDate);
+    setEditEndDate(banner.endDate);
+    setEditNotificationType(banner.notificationType);
+  }
+
+  async function handleUpdate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!token || !editingBanner) return;
+    if (editStartDate > editEndDate) {
+      toast.error("End date must be on or after the start date.");
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      const updated = await updateNotificationBanner(token, editingBanner.id, {
+        title: editTitle.trim(),
+        message: editMessage.trim(),
+        startDate: editStartDate,
+        endDate: editEndDate,
+        notificationType: editNotificationType,
+      });
+      setBanners((current) => current.map((banner) => banner.id === updated.id ? updated : banner));
+      setEditingBanner(null);
+      toast.success("Notification banner updated.");
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 403) {
+        toast.error("You can only edit notification banners you created.");
+      } else {
+        toast.error(error instanceof ApiError ? error.message : "Unable to update the notification banner.");
+      }
+    } finally {
+      setIsUpdating(false);
+    }
+  }
+
+  async function confirmInactivateBanner() {
+    if (!token || !bannerToInactivate) return;
+    setIsInactivating(true);
+    try {
+      const inactivated = await inactivateNotificationBanner(token, bannerToInactivate.id);
+      setBanners((current) => current.map((banner) => banner.id === inactivated.id ? inactivated : banner));
+      setBannerToInactivate(null);
+      toast.success("Notification banner inactivated. It will no longer appear on the login page.");
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 403) {
+        toast.error("You can only inactivate notification banners you created.");
+      } else {
+        toast.error("Unable to inactivate this notification banner.");
+      }
+    } finally {
+      setIsInactivating(false);
     }
   }
 
@@ -248,7 +323,7 @@ export default function NotificationBannersPage() {
           <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-zinc-100 px-6 py-5">
             <div>
               <h2 className="font-semibold text-zinc-900">Created notifications</h2>
-              <p className="mt-1 text-sm text-zinc-500">Scheduled, active, and expired banners.</p>
+              <p className="mt-1 text-sm text-zinc-500">Scheduled, active, expired, and inactive banners. You can manage banners you created.</p>
             </div>
             <Button aria-label="Refresh notifications" className="h-9 w-9 rounded-full p-0" disabled={isLoading} onClick={() => void loadBanners()} title="Refresh" variant="outline">
               <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
@@ -273,6 +348,7 @@ export default function NotificationBannersPage() {
                       <th className="px-4 py-3 font-semibold">Display Window</th>
                       <th className="px-4 py-3 font-semibold">Status</th>
                       <th className="px-4 py-3 font-semibold">Created By</th>
+                      <th className="px-4 py-3 text-center font-semibold">Actions</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -288,6 +364,34 @@ export default function NotificationBannersPage() {
                             <td className="whitespace-nowrap px-4 py-3 text-xs text-zinc-600">{banner.startDate} – {banner.endDate}</td>
                             <td className="px-4 py-3"><Badge className={state.className}>{state.label}</Badge></td>
                             <td className="px-4 py-3 text-xs text-zinc-600">{banner.createdByUsername}</td>
+                            <td className="px-4 py-3">
+                              {ownsBanner(banner) ? (
+                                  <div className="flex justify-center gap-2">
+                                    <Button
+                                        aria-label={`Edit ${banner.title}`}
+                                        className="h-9 w-9 rounded-full border-blue-200 bg-blue-50 p-0 text-blue-700 hover:bg-blue-100"
+                                        onClick={() => openEditDrawer(banner)}
+                                        size="sm"
+                                        title="Edit banner"
+                                        variant="outline"
+                                    >
+                                      <PencilLine className="h-4 w-4" />
+                                    </Button>
+                                    {banner.active ? (
+                                        <Button
+                                            aria-label={`Inactivate ${banner.title}`}
+                                            className="h-9 w-9 rounded-full border-rose-200 bg-rose-50 p-0 text-rose-700 hover:bg-rose-100"
+                                            onClick={() => setBannerToInactivate(banner)}
+                                            size="sm"
+                                            title="Inactivate banner"
+                                            variant="outline"
+                                        >
+                                          <Ban className="h-4 w-4" />
+                                        </Button>
+                                    ) : null}
+                                  </div>
+                              ) : <span className="block text-center text-xs text-zinc-400">—</span>}
+                            </td>
                           </tr>
                       );
                     })}
@@ -297,6 +401,108 @@ export default function NotificationBannersPage() {
             )}
           </CardContent>
         </Card>
+
+        {editingBanner ? (
+            <div
+                aria-label="Edit notification banner"
+                aria-modal="true"
+                className="fixed inset-0 z-[60] flex justify-end bg-slate-950/45 backdrop-blur-sm"
+                onClick={(event) => {
+                  if (event.target === event.currentTarget && !isUpdating) setEditingBanner(null);
+                }}
+                role="dialog"
+            >
+              <aside className="ml-auto flex h-full w-full max-w-2xl flex-col overflow-hidden border-l border-white/50 bg-white shadow-2xl shadow-slate-300/40">
+                <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 px-6 py-5 text-white">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25"><PencilLine className="h-5 w-5" /></span>
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-blue-100">Banner settings</p>
+                        <h2 className="mt-1 text-xl font-semibold">Edit notification</h2>
+                      </div>
+                    </div>
+                    <Button aria-label="Close edit panel" className="h-9 w-9 rounded-full border-white/40 bg-white/10 p-0 text-white hover:bg-white/20" disabled={isUpdating} onClick={() => setEditingBanner(null)} size="sm" variant="outline"><X className="h-4 w-4" /></Button>
+                  </div>
+                  <p className="mt-3 pl-14 text-sm text-blue-50/85">Changes will appear on the login page during the updated display window.</p>
+                </div>
+
+                <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleUpdate}>
+                  <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-zinc-700" htmlFor="edit-banner-title">Notification Title</label>
+                      <input className="h-11 w-full rounded-xl border border-zinc-300 bg-white px-3.5 text-sm text-zinc-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" id="edit-banner-title" maxLength={150} onChange={(event) => setEditTitle(event.target.value)} required value={editTitle} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-zinc-700" htmlFor="edit-banner-message">Notification Message</label>
+                      <textarea className="min-h-36 w-full resize-y rounded-xl border border-zinc-300 bg-white px-3.5 py-3 text-sm leading-6 text-zinc-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" id="edit-banner-message" maxLength={2000} onChange={(event) => setEditMessage(event.target.value)} required value={editMessage} />
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-zinc-700" htmlFor="edit-banner-start-date">Start Date</label>
+                        <input className="h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm text-zinc-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" id="edit-banner-start-date" onChange={(event) => setEditStartDate(event.target.value)} required type="date" value={editStartDate} />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-zinc-700" htmlFor="edit-banner-end-date">End Date</label>
+                        <input className="h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm text-zinc-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" id="edit-banner-end-date" min={editStartDate} onChange={(event) => setEditEndDate(event.target.value)} required type="date" value={editEndDate} />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-zinc-700" htmlFor="edit-banner-type">Type of Notification</label>
+                      <select className="h-11 w-full rounded-xl border border-zinc-300 bg-white px-3.5 text-sm text-zinc-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" id="edit-banner-type" onChange={(event) => setEditNotificationType(event.target.value as NotificationBannerType)} value={editNotificationType}>
+                        {NOTIFICATION_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+                      </select>
+                    </div>
+                    {!editingBanner.active ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">This banner is inactive. Editing it will not make it visible on the login page again.</p> : null}
+                  </div>
+                  <div className="flex justify-end gap-2 border-t border-zinc-200 bg-white px-6 py-4">
+                    <Button disabled={isUpdating} onClick={() => setEditingBanner(null)} type="button" variant="outline">Cancel</Button>
+                    <Button className="gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-500 hover:to-indigo-500" disabled={isUpdating} type="submit">
+                      {isUpdating ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                      {isUpdating ? "Saving changes..." : "Save changes"}
+                    </Button>
+                  </div>
+                </form>
+              </aside>
+            </div>
+        ) : null}
+
+        {bannerToInactivate ? (
+            <div
+                aria-labelledby="inactivate-banner-title"
+                aria-modal="true"
+                className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"
+                onClick={(event) => {
+                  if (event.target === event.currentTarget && !isInactivating) setBannerToInactivate(null);
+                }}
+                role="alertdialog"
+            >
+              <div className="w-full max-w-md overflow-hidden rounded-3xl border border-white/60 bg-white shadow-2xl shadow-slate-950/30">
+                <div className="bg-gradient-to-r from-rose-600 to-red-600 px-5 py-5 text-white">
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25"><Ban className="h-5 w-5" /></span>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-100">Confirm action</p>
+                      <h2 className="mt-1 text-lg font-semibold" id="inactivate-banner-title">Inactivate banner?</h2>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-5 p-5">
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    <p className="font-semibold">Are you sure you want to inactivate “{bannerToInactivate.title}”?</p>
+                    <p className="mt-1 text-xs leading-5 text-amber-800">This banner will stop appearing on the login page immediately. You can still view or edit it from this list.</p>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button disabled={isInactivating} onClick={() => setBannerToInactivate(null)} type="button" variant="outline">Cancel</Button>
+                    <Button className="gap-2 bg-gradient-to-r from-rose-600 to-red-600 text-white hover:from-rose-500 hover:to-red-500" disabled={isInactivating} onClick={() => void confirmInactivateBanner()} type="button">
+                      {isInactivating ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
+                      {isInactivating ? "Inactivating..." : "Inactivate"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+        ) : null}
       </div>
   );
 }
