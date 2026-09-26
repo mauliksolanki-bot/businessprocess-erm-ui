@@ -68,6 +68,31 @@ function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
+function getBankDetailsErrorMessage(error: unknown) {
+  const fallback = error instanceof ApiError && error.status === 401
+      ? "Your session has expired. Please sign in again."
+      : error instanceof ApiError && error.status === 403
+          ? "You don't have permission to update bank details."
+          : error instanceof ApiError && error.status >= 500
+              ? "We couldn't save your bank details right now. Please try again later."
+              : "Please review your bank details and try again.";
+  if (!(error instanceof ApiError)) return "Unable to save your bank details. Please try again.";
+
+  let message = error.message.trim();
+  try {
+    const parsed = JSON.parse(message) as { message?: unknown; detail?: unknown };
+    if (typeof parsed.message === "string") message = parsed.message.trim();
+    else if (typeof parsed.detail === "string") message = parsed.detail.trim();
+  } catch {
+    // Keep plain-text API messages for user-facing validation errors.
+  }
+
+  if (!message || /exception|sql|jdbc|constraint|failed to execute|could not execute|org\.springframework|java\.|stack trace|request processing failed|internal server error/i.test(message)) {
+    return fallback;
+  }
+  return message;
+}
+
 export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<"personal" | "team" | "bank">("personal");
   const [loading, setLoading] = useState(true);
@@ -260,6 +285,7 @@ export default function ProfilePage() {
       return;
     }
     setSavingBank(true);
+    const isNewBankAccount = !bankDetails;
     try {
       const saved = await saveCurrentUserBankDetails(session.accessToken, {
         accountHolderName: bankForm.accountHolderName.trim(),
@@ -272,13 +298,9 @@ export default function ProfilePage() {
       });
       setBankDetails(saved);
       setEditingBank(false);
-      toast.success("Bank details saved successfully.");
+      toast.success(isNewBankAccount ? "Bank account added successfully." : "Bank account details updated successfully.");
     } catch (error) {
-      if (error instanceof ApiError) {
-        toast.error(error.message || `Unable to save bank details (${error.status})`);
-      } else {
-        toast.error("Unable to save bank details.");
-      }
+      toast.error(getBankDetailsErrorMessage(error));
     } finally {
       setSavingBank(false);
     }
@@ -587,8 +609,8 @@ export default function ProfilePage() {
                   <Landmark className="h-4 w-4" />
                   Bank Account Details
                 </CardTitle>
-                <CardDescription className="text-emerald-100">
-                  Only one bank account can be mapped to your profile. Editing is allowed between the 1st and 5th of every month.
+                  <CardDescription className="text-emerald-100">
+                    Add your bank account any time. Updating existing details is available from the 1st through 5th of each month.
                 </CardDescription>
               </CardHeader>
               <CardContent className="pt-5">
