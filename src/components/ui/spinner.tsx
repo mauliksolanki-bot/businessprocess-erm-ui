@@ -1,6 +1,6 @@
 /**
- * Inline loading placeholder. Visual loading feedback is reserved for the
- * full-page route fallback so API activity does not add another loader.
+ * Inline loading placeholder. The shared page and API loaders render the
+ * animated indicator, preventing page sections from duplicating it.
  */
 export function Spinner({ label = "Loading..." }: { size?: "sm" | "md" | "lg"; label?: string; className?: string }) {
   return (
