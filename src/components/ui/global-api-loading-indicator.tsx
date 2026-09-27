@@ -37,7 +37,7 @@ export function GlobalApiLoadingIndicator() {
   return (
     <div
       aria-live="polite"
-      className="absolute inset-0 z-40 flex items-center justify-center bg-zinc-950/10 p-4 backdrop-blur-[1px]"
+      className="absolute inset-x-0 bottom-0 top-24 z-40 flex items-center justify-center bg-zinc-950/10 p-4 backdrop-blur-[1px]"
       role="status"
     >
       <div className="rounded-2xl border border-zinc-200 bg-white/95 px-8 py-6 shadow-xl shadow-zinc-900/10 backdrop-blur-sm">
