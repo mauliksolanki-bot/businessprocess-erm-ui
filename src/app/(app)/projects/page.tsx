@@ -38,7 +38,6 @@ import {
   resubmitProjectAllocationRequest,
   takeProjectAction,
   takeProjectAllocationAction,
-  withApiLoading,
   type ManagedProject,
   type ProjectChangeRequest,
   type ProjectManagerOption,
@@ -379,20 +378,18 @@ export default function ProjectsPage() {
             comment: string;
           }
       ) => {
-        return withApiLoading(async () => {
-          const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080"}/api/project-allocations/bulk-actions`, {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(payload),
-          });
-          if (!response.ok) {
-            throw new ApiError(await response.text(), response.status);
-          }
-          return (await response.json()) as ProjectAllocation[];
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080"}/api/project-allocations/bulk-actions`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
         });
+        if (!response.ok) {
+          throw new ApiError(await response.text(), response.status);
+        }
+        return (await response.json()) as ProjectAllocation[];
       },
       []
   );

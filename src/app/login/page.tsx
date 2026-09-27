@@ -20,7 +20,6 @@ import { toast } from "sonner";
 
 import { ErmLogo } from "@/components/erm/logo";
 import { Button } from "@/components/ui/button";
-import { GlobalApiLoadingIndicator } from "@/components/ui/global-api-loading-indicator";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FloatingInputField } from "@/components/ui/form-fields";
 import { ApiError, getActiveNotificationBanners, login, type NotificationBanner } from "@/lib/api";
@@ -109,7 +108,6 @@ export default function LoginPage() {
 
   return (
       <div className="relative flex min-h-screen items-start justify-center overflow-x-hidden bg-[radial-gradient(circle_at_top_left,#dbeafe_0,#eef2ff_35%,#f8fafc_65%)] px-4 py-4 sm:py-6 md:px-8 xl:py-4 2xl:items-center 2xl:py-8">
-        <GlobalApiLoadingIndicator />
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.08)_1px,transparent_1px)] bg-[size:72px_72px]" />
         <div className="pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-cyan-300/25 blur-3xl" />
         <div className="pointer-events-none absolute right-0 top-1/4 h-80 w-80 rounded-full bg-indigo-300/25 blur-3xl" />
