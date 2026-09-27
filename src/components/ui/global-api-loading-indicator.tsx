@@ -37,14 +37,12 @@ export function GlobalApiLoadingIndicator() {
   return (
     <div
       aria-live="polite"
-      className="absolute inset-x-0 bottom-0 top-24 z-40 flex items-center justify-center bg-zinc-950/10 p-4 backdrop-blur-[1px]"
+      className="absolute left-1/2 top-24 z-20 -translate-x-1/2"
       role="status"
     >
-      <div className="rounded-2xl border border-zinc-200 bg-white/95 px-8 py-6 shadow-xl shadow-zinc-900/10 backdrop-blur-sm">
-        <div className="flex flex-col items-center gap-3">
-          <LoaderAnimation />
-          <span className="text-sm font-medium text-zinc-600">Loading...</span>
-        </div>
+      <div className="inline-flex items-center gap-2.5 whitespace-nowrap rounded-full border border-zinc-200 bg-white px-3.5 py-2 shadow-sm">
+        <LoaderAnimation size="sm" />
+        <span className="text-xs font-medium text-zinc-600">Loading data...</span>
       </div>
     </div>
   );
