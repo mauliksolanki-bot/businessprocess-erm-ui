@@ -408,6 +408,9 @@ export type ProjectChangeRequest = {
   projectOwnerName: string;
   projectDirectorUserId: number | null;
   projectDirectorName: string | null;
+  associatedHrUserId: number | null;
+  associatedHrName: string | null;
+  associatedHrRoleName: string | null;
   projectStatus: ProjectStatus;
   description: string;
   riskNotes: string | null;
@@ -1467,6 +1470,7 @@ export async function createProjectChangeRequest(
       deliveryManagerUserId: number;
       projectOwnerUserId: number;
       projectDirectorUserId: number;
+      associatedHrUserId: number;
       projectStatus: ProjectStatus;
       description: string;
       riskNotes?: string;
