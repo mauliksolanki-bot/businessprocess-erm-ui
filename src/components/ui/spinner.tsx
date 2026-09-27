@@ -1,5 +1,6 @@
+import { LoaderCircle } from "lucide-react";
+
 import { cn } from "@/lib/utils";
-import { LoaderCircle, Sparkles } from "lucide-react";
 
 interface SpinnerProps {
   size?: "sm" | "md" | "lg";
@@ -8,37 +9,29 @@ interface SpinnerProps {
 }
 
 export function Spinner({ size = "md", label, className }: SpinnerProps) {
-  const ringSize = size === "sm" ? "h-5 w-5" : size === "lg" ? "h-10 w-10" : "h-7 w-7";
+  const iconSize = size === "sm" ? "h-4 w-4" : size === "lg" ? "h-8 w-8" : "h-6 w-6";
 
   return (
     <div aria-live="polite" className={cn("flex flex-col items-center justify-center gap-3", className)} role="status">
-      <span className="relative flex items-center justify-center">
-        <span className={cn("absolute rounded-full bg-indigo-400/15 blur-md", size === "lg" ? "h-14 w-14" : "h-11 w-11")} />
-        <LoaderCircle className={cn("relative animate-spin text-indigo-600", ringSize)} strokeWidth={2.25} />
-        {size !== "sm" && <Sparkles className="absolute -right-1 -top-1 h-3.5 w-3.5 animate-pulse text-fuchsia-500" />}
-      </span>
-      {label && <p className="text-sm font-medium tracking-wide text-slate-600">{label}</p>}
+      <LoaderCircle className={cn("animate-spin text-blue-600", iconSize)} strokeWidth={2} />
+      {label && <p className="text-sm font-medium text-zinc-600">{label}</p>}
     </div>
   );
 }
 
 export function FullPageLoader({ label = "Loading..." }: { label?: string }) {
   return (
-    <div className="relative flex min-h-[240px] items-center justify-center overflow-hidden rounded-3xl border border-white/80 bg-white/70 shadow-xl shadow-indigo-950/5 backdrop-blur-xl">
-      <div className="pointer-events-none absolute -left-16 -top-20 h-48 w-48 rounded-full bg-blue-200/45 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-24 -right-16 h-56 w-56 rounded-full bg-fuchsia-200/35 blur-3xl" />
-      <div className="relative flex flex-col items-center gap-4 px-8 py-10 text-center">
-        <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50 p-4 shadow-lg shadow-indigo-900/10">
-          <Spinner size="lg" />
+    <div className="flex min-h-[180px] items-center justify-center rounded-2xl border border-zinc-200 bg-white px-6 py-8 shadow-sm">
+      <div className="flex flex-col items-center gap-4 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600 ring-1 ring-blue-100">
+          <Spinner size="md" />
         </div>
         <div>
-          <p className="text-sm font-semibold text-slate-800">ERM Portal</p>
-          <p className="mt-1 text-sm text-slate-500">{label}</p>
+          <p className="text-sm font-semibold text-zinc-800">ERM Portal</p>
+          <p className="mt-1 text-sm text-zinc-500">{label}</p>
         </div>
-        <div className="flex gap-1.5" aria-hidden="true">
-          <span className="h-1.5 w-5 animate-pulse rounded-full bg-blue-500" />
-          <span className="h-1.5 w-5 animate-pulse rounded-full bg-indigo-500 [animation-delay:150ms]" />
-          <span className="h-1.5 w-5 animate-pulse rounded-full bg-fuchsia-500 [animation-delay:300ms]" />
+        <div className="h-1 w-28 overflow-hidden rounded-full bg-zinc-100" aria-hidden="true">
+          <div className="h-full w-1/2 animate-[loading-sweep_1.4s_ease-in-out_infinite] rounded-full bg-blue-600" />
         </div>
       </div>
     </div>
