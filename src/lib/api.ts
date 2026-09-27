@@ -22,6 +22,7 @@ export type UserProfile = {
   joinedDate: string | null;
   reportingManagerFullName: string | null;
   reportingManagerRoleName: string | null;
+  juniorHrFullName: string | null;
   roles: string[];
   currentProjects: SelfProjectAssignment[];
   personalEmailAddress: string | null;
@@ -101,6 +102,9 @@ export type Employee = {
   reportingManagerUsername: string | null;
   reportingManagerFullName: string | null;
   reportingManagerRoleName: string | null;
+  juniorHrUserId: number | null;
+  juniorHrUsername: string | null;
+  juniorHrFullName: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -219,6 +223,9 @@ export type OnboardingRequest = {
   reportingManagerUsername: string | null;
   reportingManagerFullName: string | null;
   reportingManagerRoleName: string | null;
+  juniorHrUserId: number;
+  juniorHrUsername: string | null;
+  juniorHrFullName: string | null;
   educationQualification: string | null;
   interviewStage: string;
   workflowStage: OnboardingWorkflowStage;
@@ -435,6 +442,8 @@ export type EmployeeProfileUpdateRequest = {
   currentDesignationRoleName: string;
   currentReportingManagerUserId: number | null;
   currentReportingManagerName: string | null;
+  currentJuniorHrUserId: number | null;
+  currentJuniorHrName: string | null;
   requestedFullName: string;
   requestedEmail: string;
   requestedDepartment: string;
@@ -442,6 +451,8 @@ export type EmployeeProfileUpdateRequest = {
   requestedDesignationRoleName: string;
   requestedReportingManagerUserId: number;
   requestedReportingManagerName: string;
+  requestedJuniorHrUserId: number;
+  requestedJuniorHrName: string;
   replacementTeamLeadUserId: number | null;
   replacementTeamLeadName: string | null;
   directReportsAffectedCount: number;
@@ -1185,7 +1196,7 @@ export async function removeRolesFromEmployee(
 export async function updateEmployee(
     accessToken: string,
     employeeId: number,
-    payload: { fullName: string; email: string; department: string; employmentStatus: string }
+    payload: { fullName: string; email: string; department: string; employmentStatus: string; juniorHrUserId: number }
 ) {
   return request<Employee>(`/api/employees/${employeeId}`, {
     method: "PUT",
@@ -1614,6 +1625,15 @@ export async function getOnboardingManagerOptions(accessToken: string, designati
   });
 }
 
+export async function getJuniorHrOptions(accessToken: string) {
+  return request<OnboardingManagerOption[]>("/api/onboarding-requests/junior-hr-options", {
+    headers: {
+      Authorization: "Bearer " + accessToken,
+    },
+    cache: "no-store",
+  });
+}
+
 export async function createOnboardingRequest(
     accessToken: string,
     payload: {
@@ -1626,6 +1646,7 @@ export async function createOnboardingRequest(
       phoneNumber: string;
       designationRoleName: string;
       reportingManagerUserId: number;
+      juniorHrUserId: number;
       educationQualification?: string;
       comment?: string;
     }
@@ -1689,6 +1710,7 @@ export async function resubmitOnboardingRequest(
       phoneNumber: string;
       designationRoleName: string;
       reportingManagerUserId: number;
+      juniorHrUserId: number;
       educationQualification?: string;
       comment?: string;
     }
@@ -1740,6 +1762,7 @@ export async function createEmployeeProfileUpdateRequest(
       employmentStatus: string;
       designationRoleName: string;
       reportingManagerUserId: number;
+      juniorHrUserId: number;
       replacementTeamLeadUserId?: number;
       comment?: string;
     }

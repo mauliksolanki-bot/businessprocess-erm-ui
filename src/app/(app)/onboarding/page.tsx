@@ -15,6 +15,7 @@ import {
   addOnboardingRequestComment,
   createOnboardingRequest,
   getOnboardingDesignationOptions,
+  getJuniorHrOptions,
   getOnboardingManagerOptions,
   getOnboardingRequests,
   reInitiateOnboardingRequest,
@@ -46,6 +47,7 @@ type RequestForm = {
   phoneNumber: string;
   designationRoleName: string;
   reportingManagerUserId: string;
+  juniorHrUserId: string;
   educationQualification: string;
   comment: string;
 };
@@ -62,6 +64,7 @@ const initialForm: RequestForm = {
   phoneNumber: "",
   designationRoleName: "",
   reportingManagerUserId: "",
+  juniorHrUserId: "",
   educationQualification: "",
   comment: "",
 };
@@ -137,6 +140,9 @@ function validateRequestForm(form: RequestForm) {
   if (!form.reportingManagerUserId.trim()) {
     return "Reporting manager is required.";
   }
+  if (!form.juniorHrUserId.trim()) {
+    return "Assigned Junior HR is required.";
+  }
   if (form.comment.trim().length > 500) {
     return "Comment cannot be more than 500 characters.";
   }
@@ -170,6 +176,8 @@ export default function OnboardingPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [designationOptions, setDesignationOptions] = useState<OnboardingDesignationOption[]>([]);
   const [managerOptions, setManagerOptions] = useState<OnboardingManagerOption[]>([]);
+  const [juniorHrOptions, setJuniorHrOptions] = useState<OnboardingManagerOption[]>([]);
+  const [loadingJuniorHrOptions, setLoadingJuniorHrOptions] = useState(false);
   const [requiredManagerRole, setRequiredManagerRole] = useState("");
   const [loadingManagers, setLoadingManagers] = useState(false);
   const [trackerStatusFilter, setTrackerStatusFilter] = useState<TrackerStatusFilter>("all");
@@ -317,6 +325,24 @@ export default function OnboardingPage() {
       [accessToken]
   );
 
+  const loadJuniorHrOptions = useCallback(async () => {
+    const token = accessToken();
+    if (!token) return;
+    setLoadingJuniorHrOptions(true);
+    try {
+      setJuniorHrOptions(await getJuniorHrOptions(token));
+    } catch {
+      setJuniorHrOptions([]);
+      toast.error("Unable to load Junior HR options.");
+    } finally {
+      setLoadingJuniorHrOptions(false);
+    }
+  }, [accessToken]);
+
+  useEffect(() => {
+    if (canCreate) void loadJuniorHrOptions();
+  }, [canCreate, loadJuniorHrOptions]);
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const token = accessToken();
@@ -341,6 +367,7 @@ export default function OnboardingPage() {
       phoneNumber: form.phoneNumber.trim(),
       designationRoleName: form.designationRoleName.trim(),
       reportingManagerUserId: Number(form.reportingManagerUserId),
+      juniorHrUserId: Number(form.juniorHrUserId),
       educationQualification: form.educationQualification.trim(),
       comment: form.comment.trim(),
     };
@@ -466,6 +493,7 @@ export default function OnboardingPage() {
       phoneNumber: request.phoneNumber,
       designationRoleName: request.designationRoleName,
       reportingManagerUserId: String(request.reportingManagerUserId ?? ""),
+      juniorHrUserId: String(request.juniorHrUserId ?? ""),
       educationQualification: request.educationQualification ?? "",
       comment: request.referBackComment ?? request.approvalTrail.find((item) => item.step === "HR Submission")?.comment ?? "",
     };
@@ -747,6 +775,20 @@ export default function OnboardingPage() {
                           </option>
                       ))}
                     </FloatingSelect>
+                    <FloatingSelect
+                        className="md:col-span-2"
+                        label="Assigned Junior HR *"
+                        value={form.juniorHrUserId}
+                        onChange={(value) => setForm((current) => ({ ...current, juniorHrUserId: value }))}
+                        disabled={loadingJuniorHrOptions}
+                    >
+                      <option value="">{loadingJuniorHrOptions ? "Loading Junior HR options..." : "Select Junior HR"}</option>
+                      {juniorHrOptions.map((juniorHr) => (
+                          <option key={juniorHr.id} value={String(juniorHr.id)}>
+                            {juniorHr.fullName} ({juniorHr.username})
+                          </option>
+                      ))}
+                    </FloatingSelect>
                     <FloatingInput
                         className="md:col-span-2"
                         label="Education Qualification"
@@ -811,6 +853,7 @@ export default function OnboardingPage() {
                                   <p className="text-xs text-zinc-500">{request.phoneNumber}</p>
                                   <p className="text-xs text-zinc-600">
                                     Manager: {request.reportingManagerFullName ?? "-"} ({request.reportingManagerRoleName ?? "-"})
+                                    <span className="block">Junior HR: {request.juniorHrFullName ?? "-"}</span>
                                   </p>
                                 </td>
                                 <td className="px-4 py-3">
@@ -1018,6 +1061,10 @@ export default function OnboardingPage() {
                         {viewRequest.reportingManagerFullName ?? "-"}
                         {viewRequest.reportingManagerRoleName ? ` (${viewRequest.reportingManagerRoleName})` : ""}
                       </p>
+                    </div>
+                    <div className="rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 via-white to-blue-50 p-3 text-sm text-zinc-700">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600">Assigned Junior HR</p>
+                      <p className="mt-1 font-semibold text-zinc-900">{viewRequest.juniorHrFullName ?? "-"}</p>
                     </div>
                     <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-3 text-sm text-zinc-700">
                       <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Education</p>

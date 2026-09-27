@@ -18,6 +18,7 @@ import {
   getEmployeeDirectReports,
   getEmployeeReplacementOptions,
   getEmployees,
+  getJuniorHrOptions,
   getOnboardingDesignationOptions,
   getOnboardingManagerOptions,
   type Employee,
@@ -79,6 +80,7 @@ export default function EmployeesPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [designationOptions, setDesignationOptions] = useState<OnboardingDesignationOption[]>([]);
   const [managerOptions, setManagerOptions] = useState<OnboardingManagerOption[]>([]);
+  const [juniorHrOptions, setJuniorHrOptions] = useState<OnboardingManagerOption[]>([]);
   const [managerRoleName, setManagerRoleName] = useState("");
   const [isLoadingManagers, setIsLoadingManagers] = useState(false);
   const [directReports, setDirectReports] = useState<EmployeeDirectReport[]>([]);
@@ -160,12 +162,14 @@ export default function EmployeesPage() {
     resetPromotionReassignmentState();
 
     try {
-      const promises: [Promise<Employee>, Promise<OnboardingDesignationOption[]>?] = [getEmployeeById(accessToken, employeeId)];
+      const promises: [Promise<Employee>, Promise<OnboardingDesignationOption[]>?, Promise<OnboardingManagerOption[]>?] = [getEmployeeById(accessToken, employeeId)];
       if (mode === "edit" && hasSeniorHrRole) {
         promises.push(getOnboardingDesignationOptions(accessToken));
+        promises.push(getJuniorHrOptions(accessToken));
       }
-      const [employee, designations] = await Promise.all(promises);
+      const [employee, designations, juniorHrs] = await Promise.all(promises);
       setDialogEmployee(employee);
+      setJuniorHrOptions(juniorHrs ?? []);
 
       if (mode === "edit" && hasSeniorHrRole) {
         // Check for pending request before allowing edit
@@ -287,6 +291,10 @@ export default function EmployeesPage() {
           toast.error("Please select reporting manager.");
           return;
         }
+        if (!payload.juniorHrUserId) {
+          toast.error("Please select an assigned Junior HR.");
+          return;
+        }
         if (Number(payload.reportingManagerUserId) === employeeId) {
           toast.error("Employee and reporting manager cannot be same.");
           return;
@@ -301,13 +309,14 @@ export default function EmployeesPage() {
           employmentStatus: payload.employmentStatus,
           designationRoleName: payload.designationRoleName,
           reportingManagerUserId: Number(payload.reportingManagerUserId),
+          juniorHrUserId: Number(payload.juniorHrUserId),
           replacementTeamLeadUserId: payload.replacementTeamLeadUserId
               ? Number(payload.replacementTeamLeadUserId)
               : undefined,
         });
         toast.success("Update request submitted for approval.");
       } else {
-        const updatedEmployee = await updateEmployee(accessToken, employeeId, payload);
+        const updatedEmployee = await updateEmployee(accessToken, employeeId, { ...payload, juniorHrUserId: Number(payload.juniorHrUserId) });
         setDialogEmployee(updatedEmployee);
         toast.success("Employee updated successfully.");
       }
@@ -335,6 +344,7 @@ export default function EmployeesPage() {
     setHasPendingRequest(false);
     setDesignationOptions([]);
     setManagerOptions([]);
+    setJuniorHrOptions([]);
     setManagerRoleName("");
     resetPromotionReassignmentState();
   }
@@ -468,12 +478,13 @@ export default function EmployeesPage() {
                 </div>
             ) : (
                 <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white">
-                  <table className="w-full min-w-[760px] text-sm">
+                  <table className="w-full min-w-[900px] text-sm">
                     <thead className="bg-gradient-to-r from-indigo-50 via-violet-50 to-cyan-50 text-left text-zinc-800">
                     <tr>
                       <th className="px-4 py-3 font-medium">Employee</th>
                       <th className="px-4 py-3 font-medium">Roles</th>
                       <th className="px-4 py-3 font-medium">Department</th>
+                      <th className="px-4 py-3 font-medium">Assigned Junior HR</th>
                       <th className="px-4 py-3 font-medium">Status</th>
                       <th className="px-4 py-3 font-medium">Actions</th>
                     </tr>
@@ -481,7 +492,7 @@ export default function EmployeesPage() {
                     <tbody>
                     {isLoading ? (
                         <tr>
-                          <td colSpan={5}>
+                          <td colSpan={6}>
                             <div className="flex justify-center py-10">
                               <Spinner size="md" label="Fetching employees..." />
                             </div>
@@ -489,13 +500,13 @@ export default function EmployeesPage() {
                         </tr>
                     ) : !hasSearched ? (
                         <tr>
-                          <td className="px-4 py-6 text-zinc-500" colSpan={5}>
+                          <td className="px-4 py-6 text-zinc-500" colSpan={6}>
                             Enter any filter value and click Search to view matching employees.
                           </td>
                         </tr>
                     ) : employees.length === 0 ? (
                         <tr>
-                          <td className="px-4 py-6 text-zinc-500" colSpan={5}>
+                          <td className="px-4 py-6 text-zinc-500" colSpan={6}>
                             No employees found for selected filters.
                           </td>
                         </tr>
@@ -517,6 +528,7 @@ export default function EmployeesPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-zinc-700">{employee.department}</td>
+                              <td className="px-4 py-3 text-zinc-700">{employee.juniorHrFullName ?? "-"}</td>
                               <td className="px-4 py-3">
                           <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass(employee.employmentStatus)}`}>
                             {employee.employmentStatus}
@@ -608,6 +620,7 @@ export default function EmployeesPage() {
                     onClose={closeDialog}
                     designationOptions={designationOptions}
                     managerOptions={managerOptions}
+                    juniorHrOptions={juniorHrOptions}
                     managerRoleName={managerRoleName}
                     managersLoading={isLoadingManagers}
                     managerEditable={hasSeniorHrRole}
