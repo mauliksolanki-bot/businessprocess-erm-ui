@@ -22,14 +22,15 @@ body {
   border-color: #e4e4e7;
 }
 
-@keyframes loading-sweep {
-  0% {
-    transform: translateX(-140%) scaleX(0.75);
+@keyframes loader-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  25% {
+    transform: translateY(-0.8rem);
   }
   50% {
-    transform: translateX(110%) scaleX(1.2);
-  }
-  100% {
-    transform: translateX(360%) scaleX(0.75);
+    transform: translateY(0);
   }
 }
