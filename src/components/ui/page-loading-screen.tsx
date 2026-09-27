@@ -1,36 +1,40 @@
+import { ErmLogo } from "@/components/erm/logo";
 import { FullPageLoader } from "@/components/ui/spinner";
 
 export function PageLoadingScreen() {
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_15%_0%,#dbeafe_0,transparent_34%),radial-gradient(circle_at_90%_100%,#fae8ff_0,transparent_30%),linear-gradient(135deg,#f8fafc,#eef2ff)] p-5 sm:p-8">
-      <div className="mx-auto flex min-h-[calc(100vh-2.5rem)] max-w-7xl flex-col">
-        <header className="mb-8 flex items-center gap-3 rounded-2xl border border-white/80 bg-white/65 px-5 py-4 shadow-sm backdrop-blur-lg">
-          <span className="h-10 w-10 animate-pulse rounded-xl bg-gradient-to-br from-blue-500 via-indigo-600 to-fuchsia-500 shadow-md shadow-indigo-500/20" />
-          <div className="space-y-2">
-            <span className="block h-3 w-28 animate-pulse rounded-full bg-slate-200" />
-            <span className="block h-2 w-40 animate-pulse rounded-full bg-slate-100" />
-          </div>
+    <main className="min-h-screen bg-zinc-50 p-4 sm:p-6">
+      <div className="mx-auto flex min-h-[calc(100vh-2rem)] max-w-[1600px] flex-col rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm sm:min-h-[calc(100vh-3rem)] sm:p-5">
+        <header className="flex h-16 shrink-0 items-center justify-between border-b border-zinc-100 px-2 pb-4 sm:px-3">
+          <ErmLogo />
+          <div className="h-9 w-9 animate-pulse rounded-xl bg-zinc-100" aria-hidden="true" />
         </header>
-        <div className="grid flex-1 gap-5 lg:grid-cols-[1.1fr_2fr]">
-          <div className="hidden rounded-3xl border border-white/70 bg-white/35 p-6 shadow-sm backdrop-blur sm:block">
-            <div className="mb-7 h-4 w-32 animate-pulse rounded-full bg-white/90" />
-            <div className="space-y-4">
-              {Array.from({ length: 6 }, (_, index) => (
-                <div key={index} className="flex items-center gap-3 rounded-2xl bg-white/60 p-3">
-                  <span className="h-9 w-9 animate-pulse rounded-xl bg-indigo-100" />
-                  <span className="h-3 w-28 animate-pulse rounded-full bg-slate-200" />
+
+        <div className="grid flex-1 gap-5 pt-5 md:grid-cols-[240px_minmax(0,1fr)]">
+          <aside className="hidden rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4 md:block" aria-hidden="true">
+            <div className="mb-6 h-3 w-24 animate-pulse rounded bg-zinc-200" />
+            <div className="space-y-2.5">
+              {Array.from({ length: 7 }, (_, index) => (
+                <div key={index} className="flex items-center gap-3 rounded-xl px-3 py-2.5">
+                  <span className="h-4 w-4 animate-pulse rounded bg-zinc-200" />
+                  <span className="h-3 w-24 animate-pulse rounded bg-zinc-200" />
                 </div>
               ))}
             </div>
-          </div>
-          <section className="flex flex-col gap-5">
-            <div className="h-36 animate-pulse rounded-3xl border border-white/80 bg-white/55 shadow-sm" />
-            <div className="grid gap-5 sm:grid-cols-2">
-              <div className="h-44 animate-pulse rounded-3xl border border-white/80 bg-white/55 shadow-sm" />
-              <div className="h-44 animate-pulse rounded-3xl border border-white/80 bg-white/55 shadow-sm" />
+          </aside>
+
+          <section className="flex min-w-0 flex-col gap-5" aria-label="Loading page">
+            <div className="space-y-3 py-1" aria-hidden="true">
+              <div className="h-6 w-48 animate-pulse rounded bg-zinc-200" />
+              <div className="h-3 w-72 max-w-full animate-pulse rounded bg-zinc-100" />
             </div>
-            <div className="flex min-h-48 flex-1 items-center justify-center">
-              <FullPageLoader label="Getting everything ready for you..." />
+            <div className="grid gap-4 sm:grid-cols-3" aria-hidden="true">
+              {Array.from({ length: 3 }, (_, index) => (
+                <div key={index} className="h-28 animate-pulse rounded-2xl border border-zinc-200 bg-zinc-50" />
+              ))}
+            </div>
+            <div className="min-h-56 flex-1">
+              <FullPageLoader label="Preparing your workspace..." />
             </div>
           </section>
         </div>
