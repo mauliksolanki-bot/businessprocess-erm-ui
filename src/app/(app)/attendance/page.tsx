@@ -11,6 +11,7 @@ import {
   ChevronRight,
   ClipboardList,
   Clock3,
+  Copy,
   Loader2,
   LockKeyhole,
   MessageSquareQuote,
@@ -109,10 +110,8 @@ function parseOptionalNumber(value: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function formatAssignmentLabel(name: string | null, code: string | null): string {
-  if (!name && !code) return "Previously assigned project";
-  if (name && code) return `${name} (${code})`;
-  return name ?? code ?? "Not set";
+function assignmentsForDate(assignments: AttendanceAssignment[], workDate: string): AttendanceAssignment[] {
+  return assignments.filter((assignment) => assignment.startDate <= workDate && assignment.endDate >= workDate);
 }
 
 function initials(name: string): string {
@@ -187,28 +186,27 @@ function fillAllocationGaps(
     billableAssignments: AttendanceAssignment[],
     nonBillableAssignments: AttendanceAssignment[]
 ): DraftDay[] {
-  const billableAssignment = billableAssignments.length === 1 ? billableAssignments[0] : null;
-  const nonBillableAssignment = nonBillableAssignments.length === 1 ? nonBillableAssignments[0] : null;
   return days.map((day) => {
     if (day.weekend || day.leaveDay || !day.editable) return day;
-    let next = day;
-    if (billableAssignment && !next.billableProjectAllocationId) {
-      next = {
-        ...next,
-        billableProjectAllocationId: String(billableAssignment.allocationId),
-        billableProjectName: billableAssignment.projectName,
-        billableProjectCode: billableAssignment.projectCode,
-      };
-    }
-    if (nonBillableAssignment && !next.nonBillableProjectAllocationId) {
-      next = {
-        ...next,
-        nonBillableProjectAllocationId: String(nonBillableAssignment.allocationId),
-        nonBillableProjectName: nonBillableAssignment.projectName,
-        nonBillableProjectCode: nonBillableAssignment.projectCode,
-      };
-    }
-    return next;
+    const billableForDate = assignmentsForDate(billableAssignments, day.workDate);
+    const nonBillableForDate = assignmentsForDate(nonBillableAssignments, day.workDate);
+    const billableAssignment = billableForDate.length === 1
+        ? billableForDate[0]
+        : billableForDate.find((assignment) => String(assignment.allocationId) === day.billableProjectAllocationId);
+    const nonBillableAssignment = nonBillableForDate.length === 1
+        ? nonBillableForDate[0]
+        : nonBillableForDate.find((assignment) => String(assignment.allocationId) === day.nonBillableProjectAllocationId);
+    return {
+      ...day,
+      billableHours: billableForDate.length ? day.billableHours : "",
+      billableProjectAllocationId: billableAssignment ? String(billableAssignment.allocationId) : "",
+      billableProjectName: billableAssignment?.projectName ?? null,
+      billableProjectCode: billableAssignment?.projectCode ?? null,
+      nonBillableHours: nonBillableForDate.length ? day.nonBillableHours : "",
+      nonBillableProjectAllocationId: nonBillableAssignment ? String(nonBillableAssignment.allocationId) : "",
+      nonBillableProjectName: nonBillableAssignment?.projectName ?? null,
+      nonBillableProjectCode: nonBillableAssignment?.projectCode ?? null,
+    };
   });
 }
 
@@ -302,7 +300,12 @@ export default function AttendancePage() {
   };
 
   const handleAllocationChange = (index: number, type: "billable" | "nonBillable", allocationId: string) => {
-    const assignments = type === "billable" ? weekData?.billableAssignments ?? [] : weekData?.nonBillableAssignments ?? [];
+    const day = draftDays[index];
+    if (!day) return;
+    const assignments = assignmentsForDate(
+        type === "billable" ? weekData?.billableAssignments ?? [] : weekData?.nonBillableAssignments ?? [],
+        day.workDate
+    );
     const assignment = assignments.find((item) => String(item.allocationId) === allocationId);
     setDraftDays((current) => current.map((day, dayIndex) => {
       if (dayIndex !== index) return day;
@@ -325,6 +328,40 @@ export default function AttendancePage() {
     }));
   };
 
+  const handleCopyDay = (targetIndex: number, sourceIndex: number) => {
+    const target = draftDays[targetIndex];
+    const source = draftDays[sourceIndex];
+    if (!target || !source || !target.editable || target.weekend || target.leaveDay) return;
+
+    const billableForTarget = assignmentsForDate(weekData?.billableAssignments ?? [], target.workDate);
+    const nonBillableForTarget = assignmentsForDate(weekData?.nonBillableAssignments ?? [], target.workDate);
+    const billableAssignment = billableForTarget.find(
+        (assignment) => String(assignment.allocationId) === source.billableProjectAllocationId
+    ) ?? (billableForTarget.length === 1 ? billableForTarget[0] : null);
+    const nonBillableAssignment = nonBillableForTarget.find(
+        (assignment) => String(assignment.allocationId) === source.nonBillableProjectAllocationId
+    ) ?? (nonBillableForTarget.length === 1 ? nonBillableForTarget[0] : null);
+    const billableHours = billableAssignment ? source.billableHours : "";
+    const nonBillableHours = nonBillableAssignment ? source.nonBillableHours : "";
+    const skippedHours = (parseOptionalNumber(source.billableHours) > 0 && !billableAssignment)
+        || (parseOptionalNumber(source.nonBillableHours) > 0 && !nonBillableAssignment);
+
+    setDraftDays((current) => current.map((day, index) => index === targetIndex ? {
+      ...day,
+      billableHours,
+      billableProjectAllocationId: billableAssignment ? String(billableAssignment.allocationId) : "",
+      billableProjectName: billableAssignment?.projectName ?? null,
+      billableProjectCode: billableAssignment?.projectCode ?? null,
+      nonBillableHours,
+      nonBillableProjectAllocationId: nonBillableAssignment ? String(nonBillableAssignment.allocationId) : "",
+      nonBillableProjectName: nonBillableAssignment?.projectName ?? null,
+      nonBillableProjectCode: nonBillableAssignment?.projectCode ?? null,
+    } : day));
+    toast.success(skippedHours
+        ? "Efforts copied. Hours without a matching project allocation on this date were skipped."
+        : "Efforts copied to this day.");
+  };
+
   const isApprovedSheet = weekData?.timesheet?.timesheetStatus === "APPROVED";
   const hasBillableAssignments = (weekData?.billableAssignments.length ?? 0) > 0;
   const hasNonBillableAssignments = (weekData?.nonBillableAssignments.length ?? 0) > 0;
@@ -332,37 +369,44 @@ export default function AttendancePage() {
   const canEditSheet = canEditWeek && (!isApprovedSheet || approvedEditEnabled);
 
   const billableTotal = useMemo(
-      () => draftDays.reduce((sum, day) => sum + parseOptionalNumber(day.billableHours), 0),
-      [draftDays]
+      () => draftDays.reduce((sum, day) => sum + (assignmentsForDate(weekData?.billableAssignments ?? [], day.workDate).length
+          ? parseOptionalNumber(day.billableHours) : 0), 0),
+      [draftDays, weekData?.billableAssignments]
   );
   const nonBillableTotal = useMemo(
-      () => draftDays.reduce((sum, day) => sum + parseOptionalNumber(day.nonBillableHours), 0),
-      [draftDays]
+      () => draftDays.reduce((sum, day) => sum + (assignmentsForDate(weekData?.nonBillableAssignments ?? [], day.workDate).length
+          ? parseOptionalNumber(day.nonBillableHours) : 0), 0),
+      [draftDays, weekData?.nonBillableAssignments]
   );
 
   const mapPayload = () => ({
     weekStartDate: weekStartIso,
     days: draftDays.map((day) => ({
       workDate: day.workDate,
-      billableHours: hasBillableAssignments ? parseOptionalNumber(day.billableHours) : 0,
-      nonBillableHours: hasNonBillableAssignments ? parseOptionalNumber(day.nonBillableHours) : 0,
-      billableProjectAllocationId: hasBillableAssignments && day.billableProjectAllocationId ? Number(day.billableProjectAllocationId) : null,
-      nonBillableProjectAllocationId: hasNonBillableAssignments && day.nonBillableProjectAllocationId
-          ? Number(day.nonBillableProjectAllocationId)
-          : null,
+      billableHours: day.editable && assignmentsForDate(weekData?.billableAssignments ?? [], day.workDate).length
+          ? parseOptionalNumber(day.billableHours) : 0,
+      nonBillableHours: day.editable && assignmentsForDate(weekData?.nonBillableAssignments ?? [], day.workDate).length
+          ? parseOptionalNumber(day.nonBillableHours) : 0,
+      billableProjectAllocationId: day.editable && assignmentsForDate(weekData?.billableAssignments ?? [], day.workDate)
+          .some((assignment) => String(assignment.allocationId) === day.billableProjectAllocationId) ? Number(day.billableProjectAllocationId) : null,
+      nonBillableProjectAllocationId: day.editable && assignmentsForDate(weekData?.nonBillableAssignments ?? [], day.workDate)
+          .some((assignment) => String(assignment.allocationId) === day.nonBillableProjectAllocationId) ? Number(day.nonBillableProjectAllocationId) : null,
     })),
   });
 
   const handleSave = async (submit: boolean) => {
     if (!accessToken) return;
-    const overCap = hasBillableAssignments && draftDays.some((day) => parseOptionalNumber(day.billableHours) > 8);
+    const overCap = draftDays.some((day) => assignmentsForDate(weekData?.billableAssignments ?? [], day.workDate).length > 0
+        && parseOptionalNumber(day.billableHours) > 8);
     if (overCap) {
       toast.error("Billable hours cannot exceed 8 hours per day.");
       return;
     }
     const missingProject = draftDays.some((day) =>
-        (hasBillableAssignments && parseOptionalNumber(day.billableHours) > 0 && !day.billableProjectAllocationId)
-        || (hasNonBillableAssignments && parseOptionalNumber(day.nonBillableHours) > 0 && !day.nonBillableProjectAllocationId)
+        (assignmentsForDate(weekData?.billableAssignments ?? [], day.workDate).length > 0
+            && parseOptionalNumber(day.billableHours) > 0 && !day.billableProjectAllocationId)
+        || (assignmentsForDate(weekData?.nonBillableAssignments ?? [], day.workDate).length > 0
+            && parseOptionalNumber(day.nonBillableHours) > 0 && !day.nonBillableProjectAllocationId)
     );
     if (missingProject) {
       toast.error("Choose an assigned project for each day with logged hours.");
@@ -584,15 +628,8 @@ export default function AttendancePage() {
                           <tbody>
                           {draftDays.map((day, index) => {
                             const dayLocked = !canEditSheet || !day.editable;
-                            const billableAssignments = weekData?.billableAssignments ?? [];
-                            const nonBillableAssignments = weekData?.nonBillableAssignments ?? [];
-                            const billableSelectionUnavailable = day.billableProjectAllocationId
-                                && !billableAssignments.some((assignment) => String(assignment.allocationId) === day.billableProjectAllocationId);
-                            const nonBillableSelectionUnavailable = day.nonBillableProjectAllocationId
-                                && !nonBillableAssignments.some((assignment) => String(assignment.allocationId) === day.nonBillableProjectAllocationId);
-                            const selectedBillableAssignment = billableAssignments.find(
-                                (assignment) => String(assignment.allocationId) === day.billableProjectAllocationId
-                            );
+                            const billableAssignments = assignmentsForDate(weekData?.billableAssignments ?? [], day.workDate);
+                            const nonBillableAssignments = assignmentsForDate(weekData?.nonBillableAssignments ?? [], day.workDate);
                             const total = (hasBillableAssignments ? parseOptionalNumber(day.billableHours) : 0)
                                 + (hasNonBillableAssignments ? parseOptionalNumber(day.nonBillableHours) : 0);
                             return (
@@ -619,34 +656,47 @@ export default function AttendancePage() {
                                         ) : null}
                                       </div>
                                     </div>
+                                    {!dayLocked && !day.weekend && !day.leaveDay ? (
+                                        <div className="mt-2 flex items-center gap-1.5">
+                                          <Copy className="h-3.5 w-3.5 flex-shrink-0 text-zinc-400" />
+                                          <select
+                                              aria-label={`Copy efforts to ${day.dayLabel} from another day`}
+                                              className="h-8 max-w-44 rounded-lg border border-zinc-200 bg-white px-2 text-xs text-zinc-600 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                              onChange={(event) => {
+                                                if (event.target.value !== "") handleCopyDay(index, Number(event.target.value));
+                                              }}
+                                              value=""
+                                          >
+                                            <option value="">Copy efforts from…</option>
+                                            {draftDays.map((sourceDay, sourceIndex) => sourceIndex !== index ? (
+                                                <option key={sourceDay.workDate} value={sourceIndex}>{sourceDay.dayLabel}</option>
+                                            ) : null)}
+                                          </select>
+                                        </div>
+                                    ) : null}
                                   </td>
                                   {hasBillableAssignments ? <>
                                   <td className="px-4 py-3">
-                                    <select
-                                        aria-label={`${day.dayLabel} billable project`}
-                                        className="h-10 w-72 rounded-xl border border-blue-200 bg-white px-3 text-sm text-zinc-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-zinc-100"
-                                        disabled={dayLocked || billableAssignments.length === 0}
-                                        onChange={(event: ChangeEvent<HTMLSelectElement>) => handleAllocationChange(index, "billable", event.target.value)}
-                                        title={selectedBillableAssignment?.projectName ?? day.billableProjectName ?? undefined}
-                                        value={day.billableProjectAllocationId}
-                                    >
-                                      <option value="">{billableAssignments.length ? "Select billable project" : "No billable assignment"}</option>
-                                      {billableSelectionUnavailable ? (
-                                          <option value={day.billableProjectAllocationId}>
-                                            {formatAssignmentLabel(day.billableProjectName, day.billableProjectCode)} (previous assignment)
-                                          </option>
-                                      ) : null}
-                                      {billableAssignments.map((assignment) => (
-                                          <option key={assignment.allocationId} value={assignment.allocationId}>
-                                            {assignment.projectName} ({assignment.projectCode})
-                                          </option>
-                                      ))}
-                                    </select>
-                                    {selectedBillableAssignment?.projectName || day.billableProjectName ? (
-                                        <p className="mt-1 max-w-72 whitespace-normal break-words text-xs font-medium text-blue-800">
-                                          {selectedBillableAssignment?.projectName ?? day.billableProjectName}
-                                        </p>
-                                    ) : null}
+                                    {billableAssignments.length === 1 ? (
+                                        <span className="block max-w-72 whitespace-normal break-words text-sm font-medium text-zinc-800" title={billableAssignments[0].projectName}>
+                                          {billableAssignments[0].projectName}
+                                        </span>
+                                    ) : billableAssignments.length > 1 ? (
+                                        <select
+                                            aria-label={`${day.dayLabel} billable project`}
+                                            className="h-10 w-72 rounded-xl border border-blue-200 bg-white px-3 text-sm text-zinc-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-zinc-100"
+                                            disabled={dayLocked}
+                                            onChange={(event: ChangeEvent<HTMLSelectElement>) => handleAllocationChange(index, "billable", event.target.value)}
+                                            value={day.billableProjectAllocationId}
+                                        >
+                                          <option value="">Select billable project</option>
+                                          {billableAssignments.map((assignment) => (
+                                              <option key={assignment.allocationId} value={assignment.allocationId}>
+                                                {assignment.projectName} ({assignment.projectCode})
+                                              </option>
+                                          ))}
+                                        </select>
+                                    ) : <span className="text-xs text-zinc-400">Not assigned on this date</span>}
                                   </td>
                                   <td className="px-4 py-3">
                                     <Input
@@ -663,25 +713,26 @@ export default function AttendancePage() {
                                   </> : null}
                                   {hasNonBillableAssignments ? <>
                                   <td className="px-4 py-3">
-                                    <select
-                                        aria-label={`${day.dayLabel} non-billable project`}
-                                        className="h-10 w-56 rounded-xl border border-cyan-200 bg-white px-3 text-sm text-zinc-900 shadow-sm outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500 disabled:cursor-not-allowed disabled:bg-zinc-100"
-                                        disabled={dayLocked || nonBillableAssignments.length === 0}
-                                        onChange={(event: ChangeEvent<HTMLSelectElement>) => handleAllocationChange(index, "nonBillable", event.target.value)}
-                                        value={day.nonBillableProjectAllocationId}
-                                    >
-                                      <option value="">{nonBillableAssignments.length ? "Select non-billable project" : "No non-billable assignment"}</option>
-                                      {nonBillableSelectionUnavailable ? (
-                                          <option value={day.nonBillableProjectAllocationId}>
-                                            {formatAssignmentLabel(day.nonBillableProjectName, day.nonBillableProjectCode)} (previous assignment)
-                                          </option>
-                                      ) : null}
-                                      {nonBillableAssignments.map((assignment) => (
-                                          <option key={assignment.allocationId} value={assignment.allocationId}>
-                                            {assignment.projectName} ({assignment.projectCode})
-                                          </option>
-                                      ))}
-                                    </select>
+                                    {nonBillableAssignments.length === 1 ? (
+                                        <span className="block max-w-72 whitespace-normal break-words text-sm font-medium text-zinc-800" title={nonBillableAssignments[0].projectName}>
+                                          {nonBillableAssignments[0].projectName}
+                                        </span>
+                                    ) : nonBillableAssignments.length > 1 ? (
+                                        <select
+                                            aria-label={`${day.dayLabel} non-billable project`}
+                                            className="h-10 w-72 rounded-xl border border-cyan-200 bg-white px-3 text-sm text-zinc-900 shadow-sm outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500 disabled:cursor-not-allowed disabled:bg-zinc-100"
+                                            disabled={dayLocked}
+                                            onChange={(event: ChangeEvent<HTMLSelectElement>) => handleAllocationChange(index, "nonBillable", event.target.value)}
+                                            value={day.nonBillableProjectAllocationId}
+                                        >
+                                          <option value="">Select non-billable project</option>
+                                          {nonBillableAssignments.map((assignment) => (
+                                              <option key={assignment.allocationId} value={assignment.allocationId}>
+                                                {assignment.projectName} ({assignment.projectCode})
+                                              </option>
+                                          ))}
+                                        </select>
+                                    ) : <span className="text-xs text-zinc-400">Not assigned on this date</span>}
                                   </td>
                                   <td className="px-4 py-3">
                                     <Input
