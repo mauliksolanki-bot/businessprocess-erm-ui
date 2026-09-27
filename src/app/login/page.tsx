@@ -265,7 +265,7 @@ export default function LoginPage() {
               </div>
 
               {notificationBanners.some((banner) => !dismissedBannerIds.includes(banner.id)) ? (
-                  <section aria-label="Active notifications" className="fixed right-4 top-4 z-50 flex max-h-[calc(100vh-2rem)] w-[calc(100%-2rem)] max-w-md flex-col gap-3 overflow-y-auto p-1 sm:right-6 sm:top-6" aria-live="polite">
+                  <section aria-label="Active notifications" className="mt-4 flex flex-col gap-3" aria-live="polite">
                     {notificationBanners.filter((banner) => !dismissedBannerIds.includes(banner.id)).map((banner) => {
                       const BannerIcon = getBannerIcon(banner.notificationType);
                       return (
