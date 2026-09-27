@@ -289,12 +289,30 @@ export type ProjectHrOption = ProjectManagerOption & {
 };
 
 export function getRequiredHrAssociationRole(designationRoleName: string) {
-  switch (designationRoleName.trim().toLowerCase()) {
-    case "senior hr": return "HR Head";
-    case "hr head": return "CHRO";
-    case "chro": return "HR Head";
-    default: return "Junior HR";
-  }
+  const associatedRoleByDesignation: Record<string, string> = {
+    "super admin": "Senior HR",
+    admin: "Senior HR",
+    ceo: "HR Head",
+    cfo: "HR Head",
+    cto: "HR Head",
+    chro: "HR Head",
+    "hr head": "CHRO",
+    "senior hr": "HR Head",
+    "junior hr": "Senior HR",
+    "project owner": "Senior HR",
+    "program manager": "Senior HR",
+    "delivery manager": "Senior HR",
+    "project manager": "Senior HR",
+    "team lead": "Senior HR",
+    employee: "Junior HR",
+    intern: "Junior HR",
+    "application support specialist": "Junior HR",
+    "it security": "Junior HR",
+    "it support lead": "Senior HR",
+    "it support manager": "Senior HR",
+    director: "HR Head",
+  };
+  return associatedRoleByDesignation[designationRoleName.trim().toLowerCase()] ?? "Junior HR";
 }
 
 export type ProjectRequest = {
