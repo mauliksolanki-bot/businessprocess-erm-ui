@@ -57,6 +57,7 @@ function buildRequestedChanges(request: EmployeeProfileUpdateRequest) {
   pushIfChanged("Employment Status", request.currentEmploymentStatus, request.requestedEmploymentStatus);
   pushIfChanged("Designation", request.currentDesignationRoleName, request.requestedDesignationRoleName);
   pushIfChanged("Reporting Manager", request.currentReportingManagerName, request.requestedReportingManagerName);
+  pushIfChanged("Assigned Junior HR", request.currentJuniorHrName, request.requestedJuniorHrName);
 
   return changes;
 }

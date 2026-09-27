@@ -16,6 +16,8 @@ type EmployeeDialogProps = {
     hasPendingRequest?: boolean;
     designationOptions?: OnboardingDesignationOption[];
     managerOptions?: OnboardingManagerOption[];
+    juniorHrOptions?: OnboardingManagerOption[];
+    juniorHrOptionsLoading?: boolean;
     managerRoleName?: string;
     managersLoading?: boolean;
     managerEditable?: boolean;
@@ -35,6 +37,7 @@ export type EmployeeEditForm = {
     employmentStatus: string;
     designationRoleName: string;
     reportingManagerUserId: string;
+    juniorHrUserId: string;
     replacementTeamLeadUserId: string;
 };
 
@@ -52,6 +55,8 @@ export function EmployeeDialog({
                                    hasPendingRequest = false,
                                    designationOptions = [],
                                    managerOptions = [],
+                                   juniorHrOptions = [],
+                                   juniorHrOptionsLoading = false,
                                    managerRoleName = "",
                                    managersLoading = false,
                                    managerEditable = false,
@@ -70,6 +75,7 @@ export function EmployeeDialog({
         employmentStatus: employee?.employmentStatus ?? "Active",
         designationRoleName: employee ? currentDesignation(employee) : "",
         reportingManagerUserId: employee?.reportingManagerUserId ? String(employee.reportingManagerUserId) : "",
+        juniorHrUserId: employee?.juniorHrUserId ? String(employee.juniorHrUserId) : "",
         replacementTeamLeadUserId: "",
     });
 
@@ -134,6 +140,7 @@ export function EmployeeDialog({
                                         <InfoTile icon={<ShieldCheck className="h-4 w-4 text-blue-600" />} label="Designation" value={viewDesignation || "-"} />
                                         <InfoTile icon={<UserRound className="h-4 w-4 text-blue-600" />} label="Reporting manager" value={currentEmployee.reportingManagerFullName ?? "-"} />
                                         <InfoTile icon={<ShieldCheck className="h-4 w-4 text-blue-600" />} label="Manager role" value={currentEmployee.reportingManagerRoleName ?? "-"} />
+                                        <InfoTile icon={<UserRound className="h-4 w-4 text-blue-600" />} label="Assigned Junior HR" value={currentEmployee.juniorHrFullName ?? "-"} />
                                         <InfoTile icon={<CalendarDays className="h-4 w-4 text-blue-600" />} label="Joined" value={formatDate(currentEmployee.createdAt)} />
                                     </div>
                                     <div>
@@ -219,6 +226,19 @@ export function EmployeeDialog({
                                         {managerOptions.map((manager) => (
                                             <option key={manager.id} value={manager.id}>
                                                 {manager.fullName} ({manager.username})
+                                            </option>
+                                        ))}
+                                    </LabeledSelectField>
+                                    <LabeledSelectField
+                                        disabled={saving || juniorHrOptionsLoading || juniorHrOptions.length === 0}
+                                        label="Assigned Junior HR *"
+                                        onChange={(event) => setForm((value) => ({ ...value, juniorHrUserId: event.target.value }))}
+                                        value={form.juniorHrUserId}
+                                    >
+                                        <option value="">{juniorHrOptionsLoading ? "Loading Junior HR options..." : "Select Junior HR"}</option>
+                                        {juniorHrOptions.map((juniorHr) => (
+                                            <option key={juniorHr.id} value={String(juniorHr.id)}>
+                                                {juniorHr.fullName} ({juniorHr.username})
                                             </option>
                                         ))}
                                     </LabeledSelectField>

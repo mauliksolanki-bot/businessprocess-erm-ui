@@ -367,6 +367,7 @@ export default function ProfilePage() {
                   <OverviewItem label="Username" value={profile?.username} />
                   <OverviewItem label="Work email" value={profile?.email} />
                   <OverviewItem label="Reporting manager" value={profile?.reportingManagerFullName} />
+                  <OverviewItem label="Assigned Junior HR" value={profile?.juniorHrFullName} />
                   <OverviewItem label="Department" value={profile?.department} />
                   <OverviewItem label="Joined date" value={formatProfileDate(profile?.joinedDate)} />
                   <div className="min-w-0 rounded-xl border border-zinc-100 bg-zinc-50/70 px-4 py-3 sm:col-span-2 lg:col-span-1">

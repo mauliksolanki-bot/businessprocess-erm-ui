@@ -89,6 +89,7 @@ export function ProtectedShell({ children }: ProtectedShellProps) {
       joinedDate: null,
       reportingManagerFullName: null,
       reportingManagerRoleName: null,
+      juniorHrFullName: null,
       roles: session.roles,
       currentProjects: [],
       personalEmailAddress: null,
