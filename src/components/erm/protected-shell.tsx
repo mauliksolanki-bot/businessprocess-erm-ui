@@ -534,7 +534,6 @@ export function ProtectedShell({ children }: ProtectedShellProps) {
         <div className="flex min-h-0 flex-1">
           <SidebarNav menu={menu} />
           <main className="relative w-full overflow-y-auto p-4 md:p-6">
-            <GlobalApiLoadingIndicator />
             <nav className="mb-4 flex gap-2 overflow-x-auto pb-1 md:hidden">
               {menu.map((item) => (
                   <Link
@@ -566,7 +565,10 @@ export function ProtectedShell({ children }: ProtectedShellProps) {
                   <CardContent />
                 </Card>
             ) : (
-                children
+                <div className="relative min-h-full">
+                  {children}
+                  <GlobalApiLoadingIndicator />
+                </div>
             )}
           </main>
         </div>
