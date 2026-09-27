@@ -7,6 +7,8 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
+  ChevronLeft,
+  ChevronRight,
   Loader2,
   LockKeyhole,
   LogIn,
@@ -29,6 +31,8 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [notificationBanners, setNotificationBanners] = useState<NotificationBanner[]>([]);
+  const [activeBannerIndex, setActiveBannerIndex] = useState(0);
+  const [isCarouselPaused, setIsCarouselPaused] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -48,6 +52,20 @@ export default function LoginPage() {
       isCurrent = false;
     };
   }, [router]);
+
+  useEffect(() => {
+    if (notificationBanners.length < 2 || isCarouselPaused) return;
+
+    const timer = window.setInterval(() => {
+      setActiveBannerIndex((current) => (current + 1) % notificationBanners.length);
+    }, 5000);
+
+    return () => window.clearInterval(timer);
+  }, [notificationBanners.length, isCarouselPaused]);
+
+  useEffect(() => {
+    setActiveBannerIndex((current) => notificationBanners.length === 0 ? 0 : current % notificationBanners.length);
+  }, [notificationBanners.length]);
 
   function getBannerStyle(type: NotificationBanner["notificationType"]) {
     if (type === "Urgent") return "border-rose-200 border-l-rose-500 bg-gradient-to-br from-rose-100 via-white to-orange-50 shadow-rose-200/70";
@@ -247,11 +265,24 @@ export default function LoginPage() {
               </div>
 
               {notificationBanners.length > 0 ? (
-                  <section aria-label="Active notifications" className="mt-4 flex flex-col gap-3" aria-live="polite">
-                    {notificationBanners.map((banner) => {
+                  <section
+                      aria-label="Active notifications"
+                      aria-roledescription="carousel"
+                      className="mt-4"
+                      onBlurCapture={(event) => {
+                        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsCarouselPaused(false);
+                      }}
+                      onFocusCapture={() => setIsCarouselPaused(true)}
+                      onMouseEnter={() => setIsCarouselPaused(true)}
+                      onMouseLeave={() => setIsCarouselPaused(false)}
+                  >
+                    {(() => {
+                      const banner = notificationBanners[activeBannerIndex];
                       return (
                           <article
-                              className={`relative isolate shrink-0 overflow-hidden rounded-2xl border p-5 text-zinc-900 shadow-[0_18px_45px_-22px_rgba(15,23,42,0.35)] sm:p-6 ${getBannerStyle(banner.notificationType)}`}
+                              aria-label={`Notification ${activeBannerIndex + 1} of ${notificationBanners.length}`}
+                              aria-roledescription="slide"
+                              className={`relative isolate overflow-hidden rounded-2xl border p-5 text-zinc-900 shadow-[0_18px_45px_-22px_rgba(15,23,42,0.35)] transition-colors duration-300 sm:p-6 ${getBannerStyle(banner.notificationType)}`}
                               key={banner.id}
                           >
                             <div aria-hidden="true" className={`absolute inset-y-0 left-0 w-1.5 ${getBannerAccentStyle(banner.notificationType)}`} />
@@ -266,7 +297,45 @@ export default function LoginPage() {
                             </div>
                           </article>
                       );
-                    })}
+                    })()}
+
+                    {notificationBanners.length > 1 ? (
+                        <div className="mt-3 flex items-center justify-between gap-3 px-1">
+                          <span className="text-xs font-medium tabular-nums text-zinc-500">
+                            {String(activeBannerIndex + 1).padStart(2, "0")} <span className="px-1 text-zinc-300">/</span> {String(notificationBanners.length).padStart(2, "0")}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <div aria-label="Choose notification" className="flex items-center gap-1.5" role="group">
+                              {notificationBanners.map((banner, index) => (
+                                  <button
+                                      aria-current={index === activeBannerIndex ? "true" : undefined}
+                                      aria-label={`Show notification ${index + 1}: ${banner.title}`}
+                                      className={`h-2 rounded-full transition-all ${index === activeBannerIndex ? `w-6 ${getBannerAccentStyle(banner.notificationType)}` : "w-2 bg-zinc-300 hover:bg-zinc-400"}`}
+                                      key={banner.id}
+                                      onClick={() => setActiveBannerIndex(index)}
+                                      type="button"
+                                  />
+                              ))}
+                            </div>
+                            <button
+                                aria-label="Previous notification"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                                onClick={() => setActiveBannerIndex((current) => (current - 1 + notificationBanners.length) % notificationBanners.length)}
+                                type="button"
+                            >
+                              <ChevronLeft aria-hidden="true" className="h-4 w-4" />
+                            </button>
+                            <button
+                                aria-label="Next notification"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                                onClick={() => setActiveBannerIndex((current) => (current + 1) % notificationBanners.length)}
+                                type="button"
+                            >
+                              <ChevronRight aria-hidden="true" className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                    ) : null}
                   </section>
               ) : null}
 
