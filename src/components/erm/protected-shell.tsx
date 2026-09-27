@@ -29,6 +29,7 @@ import { SidebarNav } from "@/components/erm/sidebar-nav";
 import { Topbar, type AppNotification } from "@/components/erm/topbar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
+import { GlobalApiLoadingIndicator } from "@/components/ui/global-api-loading-indicator";
 
 type ProtectedShellProps = {
   children: ReactNode;
@@ -464,7 +465,8 @@ export function ProtectedShell({ children }: ProtectedShellProps) {
     return (
         <div className="flex h-screen overflow-hidden">
           <aside className="hidden w-72 shrink-0 border-r border-zinc-200 bg-white/70 md:block" />
-          <main className="flex flex-1 items-center justify-center overflow-y-auto p-6">
+          <main className="relative flex flex-1 items-center justify-center overflow-y-auto p-6">
+            <GlobalApiLoadingIndicator />
             <Spinner size="lg" />
           </main>
         </div>
@@ -531,7 +533,8 @@ export function ProtectedShell({ children }: ProtectedShellProps) {
         ) : null}
         <div className="flex min-h-0 flex-1">
           <SidebarNav menu={menu} />
-          <main className="w-full overflow-y-auto p-4 md:p-6">
+          <main className="relative w-full overflow-y-auto p-4 md:p-6">
+            <GlobalApiLoadingIndicator />
             <nav className="mb-4 flex gap-2 overflow-x-auto pb-1 md:hidden">
               {menu.map((item) => (
                   <Link
