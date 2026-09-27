@@ -23,6 +23,7 @@ export type UserProfile = {
   reportingManagerFullName: string | null;
   reportingManagerRoleName: string | null;
   juniorHrFullName: string | null;
+  juniorHrRoleName: string | null;
   roles: string[];
   currentProjects: SelfProjectAssignment[];
   personalEmailAddress: string | null;
@@ -105,6 +106,7 @@ export type Employee = {
   juniorHrUserId: number | null;
   juniorHrUsername: string | null;
   juniorHrFullName: string | null;
+  juniorHrRoleName: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -226,6 +228,7 @@ export type OnboardingRequest = {
   juniorHrUserId: number;
   juniorHrUsername: string | null;
   juniorHrFullName: string | null;
+  juniorHrRoleName: string | null;
   educationQualification: string | null;
   interviewStage: string;
   workflowStage: OnboardingWorkflowStage;
@@ -281,6 +284,19 @@ export type ProjectManagerOption = {
   email: string;
 };
 
+export type ProjectHrOption = ProjectManagerOption & {
+  roleName: "Junior HR" | "Senior HR" | "HR Head";
+};
+
+export function getRequiredHrAssociationRole(designationRoleName: string) {
+  switch (designationRoleName.trim().toLowerCase()) {
+    case "senior hr": return "HR Head";
+    case "hr head": return "CHRO";
+    case "chro": return "HR Head";
+    default: return "Junior HR";
+  }
+}
+
 export type ProjectRequest = {
   id: number;
   projectName: string;
@@ -300,6 +316,9 @@ export type ProjectRequest = {
   projectDirectorName: string | null;
   projectManagerUserId: number | null;
   projectManagerName: string | null;
+  associatedHrUserId: number;
+  associatedHrName: string;
+  associatedHrRoleName: string;
   projectStatus: ProjectStatus;
   description: string;
   riskNotes: string | null;
@@ -332,6 +351,9 @@ export type ManagedProject = {
   projectOwnerName: string;
   projectDirectorUserId: number | null;
   projectDirectorName: string | null;
+  associatedHrUserId: number;
+  associatedHrName: string;
+  associatedHrRoleName: string;
   projectStatus: ProjectStatus;
   description: string;
   riskNotes: string | null;
@@ -1286,6 +1308,15 @@ export async function getProjectManagerOptions(accessToken: string) {
   });
 }
 
+export async function getProjectHrOptions(accessToken: string) {
+  return request<ProjectHrOption[]>("/api/project-requests/associated-hr-options", {
+    headers: {
+      Authorization: "Bearer " + accessToken,
+    },
+    cache: "no-store",
+  });
+}
+
 export async function createProjectRequest(
     accessToken: string,
     payload: {
@@ -1302,6 +1333,7 @@ export async function createProjectRequest(
       projectOwnerUserId: number;
       projectDirectorUserId: number;
       projectManagerUserId: number;
+      associatedHrUserId: number;
       projectStatus: ProjectStatus;
       description: string;
       riskNotes?: string;
@@ -1358,6 +1390,7 @@ export async function resubmitProjectRequest(
       projectOwnerUserId: number;
       projectDirectorUserId: number;
       projectManagerUserId: number;
+      associatedHrUserId: number;
       projectStatus: ProjectStatus;
       description: string;
       riskNotes?: string;
@@ -1625,8 +1658,10 @@ export async function getOnboardingManagerOptions(accessToken: string, designati
   });
 }
 
-export async function getJuniorHrOptions(accessToken: string) {
-  return request<OnboardingManagerOption[]>("/api/onboarding-requests/junior-hr-options", {
+export async function getJuniorHrOptions(accessToken: string, designationRoleName: string) {
+  const params = new URLSearchParams();
+  params.set("designationRoleName", designationRoleName);
+  return request<OnboardingManagerOption[]>(`/api/onboarding-requests/junior-hr-options?${params.toString()}`, {
     headers: {
       Authorization: "Bearer " + accessToken,
     },

@@ -3,7 +3,7 @@
 import { type FormEvent, type ReactNode, useMemo, useState } from "react";
 import { CalendarDays, Mail, Save, ShieldCheck, UserRound } from "lucide-react";
 
-import type { Employee, EmployeeDirectReport, OnboardingDesignationOption, OnboardingManagerOption } from "@/lib/api";
+import { getRequiredHrAssociationRole, type Employee, type EmployeeDirectReport, type OnboardingDesignationOption, type OnboardingManagerOption } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FloatingInputField, LabeledSelectField } from "@/components/ui/form-fields";
@@ -93,6 +93,7 @@ export function EmployeeDialog({
 
     const currentEmployee = employee;
     const isMovingDesignation = form.designationRoleName.trim().toLowerCase() !== currentDesignation(currentEmployee).toLowerCase();
+    const hrContactRole = getRequiredHrAssociationRole(form.designationRoleName);
     const showReplacementSection = directReports.length > 0 && isMovingDesignation;
     const filteredReplacementTeamLeadOptions = replacementTeamLeadOptions.filter((option) => option.id !== currentEmployee.id);
     const showFooterActions = mode === "edit" && !hasPendingRequest;
@@ -140,7 +141,7 @@ export function EmployeeDialog({
                                         <InfoTile icon={<ShieldCheck className="h-4 w-4 text-blue-600" />} label="Designation" value={viewDesignation || "-"} />
                                         <InfoTile icon={<UserRound className="h-4 w-4 text-blue-600" />} label="Reporting manager" value={currentEmployee.reportingManagerFullName ?? "-"} />
                                         <InfoTile icon={<ShieldCheck className="h-4 w-4 text-blue-600" />} label="Manager role" value={currentEmployee.reportingManagerRoleName ?? "-"} />
-                                        <InfoTile icon={<UserRound className="h-4 w-4 text-blue-600" />} label="Assigned Junior HR" value={currentEmployee.juniorHrFullName ?? "-"} />
+                                        <InfoTile icon={<UserRound className="h-4 w-4 text-blue-600" />} label="HRBP" value={currentEmployee.juniorHrFullName ? `${currentEmployee.juniorHrFullName}${currentEmployee.juniorHrRoleName ? ` (${currentEmployee.juniorHrRoleName})` : ""}` : "-"} />
                                         <InfoTile icon={<CalendarDays className="h-4 w-4 text-blue-600" />} label="Joined" value={formatDate(currentEmployee.createdAt)} />
                                     </div>
                                     <div>
@@ -202,6 +203,7 @@ export function EmployeeDialog({
                                                 ...current,
                                                 designationRoleName: value,
                                                 reportingManagerUserId: "",
+                                                juniorHrUserId: "",
                                                 replacementTeamLeadUserId: "",
                                             }));
                                             onDesignationChange?.(value);
@@ -231,11 +233,11 @@ export function EmployeeDialog({
                                     </LabeledSelectField>
                                     <LabeledSelectField
                                         disabled={saving || juniorHrOptionsLoading || juniorHrOptions.length === 0}
-                                        label="Assigned Junior HR *"
+                                        label="HRBP *"
                                         onChange={(event) => setForm((value) => ({ ...value, juniorHrUserId: event.target.value }))}
                                         value={form.juniorHrUserId}
                                     >
-                                        <option value="">{juniorHrOptionsLoading ? "Loading Junior HR options..." : "Select Junior HR"}</option>
+                                        <option value="">{juniorHrOptionsLoading ? "Loading HRBP options..." : `Select ${hrContactRole}`}</option>
                                         {juniorHrOptions.map((juniorHr) => (
                                             <option key={juniorHr.id} value={String(juniorHr.id)}>
                                                 {juniorHr.fullName} ({juniorHr.username})
