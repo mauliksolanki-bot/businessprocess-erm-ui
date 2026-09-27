@@ -4,18 +4,14 @@ import { type FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
-  BellRing,
-  CalendarDays,
   CheckCircle2,
   Eye,
   EyeOff,
   Loader2,
   LockKeyhole,
   LogIn,
-  Info,
   ShieldCheck,
   Sparkles,
-  TriangleAlert,
   Workflow,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -59,22 +55,10 @@ export default function LoginPage() {
     return "border-blue-200 border-l-blue-500 bg-gradient-to-br from-sky-100 via-white to-violet-50 shadow-blue-200/70";
   }
 
-  function getBannerIconStyle(type: NotificationBanner["notificationType"]) {
-    if (type === "Urgent") return "bg-rose-100 text-rose-700";
-    if (type === "Low Priority") return "bg-amber-100 text-amber-700";
-    return "bg-blue-100 text-blue-700";
-  }
-
-  function getBannerLabelStyle(type: NotificationBanner["notificationType"]) {
-    if (type === "Urgent") return "bg-rose-50 text-rose-800 ring-rose-200";
-    if (type === "Low Priority") return "bg-amber-50 text-amber-800 ring-amber-200";
-    return "bg-blue-50 text-blue-800 ring-blue-200";
-  }
-
-  function getBannerIcon(type: NotificationBanner["notificationType"]) {
-    if (type === "Urgent") return TriangleAlert;
-    if (type === "Low Priority") return BellRing;
-    return Info;
+  function getBannerAccentStyle(type: NotificationBanner["notificationType"]) {
+    if (type === "Urgent") return "bg-rose-500";
+    if (type === "Low Priority") return "bg-amber-500";
+    return "bg-blue-500";
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -265,30 +249,20 @@ export default function LoginPage() {
               {notificationBanners.length > 0 ? (
                   <section aria-label="Active notifications" className="mt-4 flex flex-col gap-3" aria-live="polite">
                     {notificationBanners.map((banner) => {
-                      const BannerIcon = getBannerIcon(banner.notificationType);
                       return (
                           <article
-                              className={`relative flex shrink-0 gap-4 rounded-2xl border border-l-4 p-5 text-zinc-900 shadow-[0_18px_45px_-22px_rgba(15,23,42,0.35)] sm:p-6 ${getBannerStyle(banner.notificationType)}`}
+                              className={`relative isolate shrink-0 overflow-hidden rounded-2xl border p-5 text-zinc-900 shadow-[0_18px_45px_-22px_rgba(15,23,42,0.35)] sm:p-6 ${getBannerStyle(banner.notificationType)}`}
                               key={banner.id}
                           >
-                            <div className="flex min-w-0 items-start gap-3">
-                              <span className={`mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${getBannerIconStyle(banner.notificationType)}`}>
-                                <BannerIcon aria-hidden="true" className="h-5 w-5" />
-                              </span>
-                              <div className="flex min-w-0 flex-1 flex-col">
-                                <div className="flex flex-wrap items-center gap-2 pr-7">
-                                  <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">ERM · Login notice</span>
-                                  <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ring-1 ring-inset ${getBannerLabelStyle(banner.notificationType)}`}>
-                                    {banner.notificationType === "Urgent" ? "Action required" : banner.notificationType}
-                                  </span>
-                                </div>
-                                <h2 className="mt-2 text-base font-bold leading-snug tracking-tight text-zinc-950 sm:text-lg">{banner.title}</h2>
-                                <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-zinc-700">{banner.message}</p>
-                                <div className="mt-4 flex flex-wrap items-center gap-1.5 border-t border-zinc-100 pt-3 text-xs font-medium text-zinc-500">
-                                  <CalendarDays aria-hidden="true" className="mr-1 h-3.5 w-3.5" />
-                                  <span>Until {new Date(`${banner.endDate}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
-                                </div>
+                            <div aria-hidden="true" className={`absolute inset-y-0 left-0 w-1.5 ${getBannerAccentStyle(banner.notificationType)}`} />
+                            <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-12 h-32 w-32 rounded-full border-[18px] border-white/60" />
+                            <div className="relative pl-2">
+                              <div className="flex items-center gap-2">
+                                <span aria-hidden="true" className={`h-2 w-2 rounded-full ${banner.notificationType === "Urgent" ? "bg-rose-500" : banner.notificationType === "Low Priority" ? "bg-amber-500" : "bg-blue-500"}`} />
+                                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">ERM notification</span>
                               </div>
+                              <h2 className="mt-2 text-base font-bold leading-snug tracking-tight text-zinc-950 sm:text-lg">{banner.title}</h2>
+                              <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-zinc-700">{banner.message}</p>
                             </div>
                           </article>
                       );
