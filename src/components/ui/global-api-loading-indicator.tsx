@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Spinner } from "@/components/ui/spinner";
+import { ApiLoaderAnimation } from "@/components/ui/spinner";
 
 const API_LOADING_EVENT = "erm:api-loading";
 
@@ -20,7 +20,7 @@ export function GlobalApiLoadingIndicator() {
       if (hideTimer) clearTimeout(hideTimer);
 
       if (active) {
-        showTimer = setTimeout(() => setIsLoading(true), 160);
+        showTimer = setTimeout(() => setIsLoading(true), 100);
       } else {
         hideTimer = setTimeout(() => setIsLoading(false), 240);
       }
@@ -39,7 +39,10 @@ export function GlobalApiLoadingIndicator() {
   return (
     <div aria-live="polite" className="pointer-events-none fixed inset-0 z-[120] flex items-center justify-center bg-zinc-950/10 p-4 backdrop-blur-[2px]" role="status">
       <div className="min-w-52 rounded-2xl border border-zinc-200 bg-white px-7 py-5 shadow-xl shadow-zinc-900/10">
-        <Spinner size="md" label="Loading..." />
+        <div className="flex flex-col items-center gap-3">
+          <ApiLoaderAnimation />
+          <span className="text-sm font-medium text-zinc-600">Loading...</span>
+        </div>
       </div>
     </div>
   );
