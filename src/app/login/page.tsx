@@ -17,7 +17,6 @@ import {
   Sparkles,
   TriangleAlert,
   Workflow,
-  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -34,7 +33,6 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [notificationBanners, setNotificationBanners] = useState<NotificationBanner[]>([]);
-  const [dismissedBannerIds, setDismissedBannerIds] = useState<number[]>([]);
   const router = useRouter();
 
   useEffect(() => {
@@ -56,9 +54,9 @@ export default function LoginPage() {
   }, [router]);
 
   function getBannerStyle(type: NotificationBanner["notificationType"]) {
-    if (type === "Urgent") return "border-l-rose-500";
-    if (type === "Low Priority") return "border-l-amber-500";
-    return "border-l-blue-500";
+    if (type === "Urgent") return "border-rose-200 border-l-rose-500 bg-gradient-to-br from-rose-100 via-white to-orange-50 shadow-rose-200/70";
+    if (type === "Low Priority") return "border-amber-200 border-l-amber-500 bg-gradient-to-br from-amber-100 via-white to-yellow-50 shadow-amber-200/70";
+    return "border-blue-200 border-l-blue-500 bg-gradient-to-br from-sky-100 via-white to-violet-50 shadow-blue-200/70";
   }
 
   function getBannerIconStyle(type: NotificationBanner["notificationType"]) {
@@ -264,13 +262,13 @@ export default function LoginPage() {
                 </form>
               </div>
 
-              {notificationBanners.some((banner) => !dismissedBannerIds.includes(banner.id)) ? (
+              {notificationBanners.length > 0 ? (
                   <section aria-label="Active notifications" className="mt-4 flex flex-col gap-3" aria-live="polite">
-                    {notificationBanners.filter((banner) => !dismissedBannerIds.includes(banner.id)).map((banner) => {
+                    {notificationBanners.map((banner) => {
                       const BannerIcon = getBannerIcon(banner.notificationType);
                       return (
                           <article
-                              className={`relative flex shrink-0 gap-4 rounded-2xl border border-l-4 border-zinc-200 bg-white p-5 text-zinc-900 shadow-[0_18px_55px_-18px_rgba(15,23,42,0.38)] sm:p-6 ${getBannerStyle(banner.notificationType)}`}
+                              className={`relative flex shrink-0 gap-4 rounded-2xl border border-l-4 p-5 text-zinc-900 shadow-[0_18px_45px_-22px_rgba(15,23,42,0.35)] sm:p-6 ${getBannerStyle(banner.notificationType)}`}
                               key={banner.id}
                           >
                             <div className="flex min-w-0 items-start gap-3">
@@ -292,14 +290,6 @@ export default function LoginPage() {
                                 </div>
                               </div>
                             </div>
-                            <button
-                                aria-label={`Dismiss notification: ${banner.title}`}
-                                className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                                onClick={() => setDismissedBannerIds((current) => [...current, banner.id])}
-                                type="button"
-                            >
-                              <X aria-hidden="true" className="h-4 w-4" />
-                            </button>
                           </article>
                       );
                     })}
