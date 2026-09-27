@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { MentionTextareaField } from "@/components/ui/mention-textarea-field";
+import { LoaderAnimation } from "@/components/ui/spinner";
 import {
   actionAttendanceTimesheet,
   getAttendanceApprovals,
@@ -62,6 +63,7 @@ type DraftDay = {
 type ApprovalActionType = "APPROVE" | "REJECT";
 
 const dayLabelFormatter = new Intl.DateTimeFormat(undefined, { weekday: "short" });
+const businessDayFormatter = new Intl.DateTimeFormat(undefined, { weekday: "short", timeZone: "Asia/Kolkata" });
 const dateFormatter = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
 const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
   month: "short",
@@ -110,7 +112,7 @@ function parseOptionalNumber(value: string): number {
 }
 
 function formatAssignmentLabel(name: string | null, code: string | null): string {
-  if (!name && !code) return "Not set";
+  if (!name && !code) return "Previously assigned project";
   if (name && code) return `${name} (${code})`;
   return name ?? code ?? "Not set";
 }
@@ -182,83 +184,33 @@ function emptyDraftDays(weekStart: Date): DraftDay[] {
   });
 }
 
-function deriveDominantAllocationId(
-    days: DraftDay[],
-    field: "billableProjectAllocationId" | "nonBillableProjectAllocationId"
-): { value: string; mixed: boolean } {
-  const counts = new Map<string, number>();
-  for (const day of days) {
-    const value = day[field];
-    if (!value) continue;
-    counts.set(value, (counts.get(value) ?? 0) + 1);
-  }
-  let best = "";
-  let bestCount = 0;
-  for (const [value, count] of counts) {
-    if (count > bestCount) {
-      best = value;
-      bestCount = count;
-    }
-  }
-  return { value: best, mixed: counts.size > 1 };
-}
-
 function fillAllocationGaps(
     days: DraftDay[],
-    billableId: string,
-    nonBillableId: string,
     billableAssignments: AttendanceAssignment[],
     nonBillableAssignments: AttendanceAssignment[]
 ): DraftDay[] {
-  const billableAssignment = billableAssignments.find((assignment) => String(assignment.allocationId) === billableId);
-  const nonBillableAssignment = nonBillableAssignments.find(
-      (assignment) => String(assignment.allocationId) === nonBillableId
-  );
+  const billableAssignment = billableAssignments.length === 1 ? billableAssignments[0] : null;
+  const nonBillableAssignment = nonBillableAssignments.length === 1 ? nonBillableAssignments[0] : null;
   return days.map((day) => {
     if (day.weekend || day.leaveDay || !day.editable) return day;
     let next = day;
-    if (billableId && !next.billableProjectAllocationId) {
+    if (billableAssignment && !next.billableProjectAllocationId) {
       next = {
         ...next,
-        billableProjectAllocationId: billableId,
-        billableProjectName: billableAssignment?.projectName ?? next.billableProjectName,
-        billableProjectCode: billableAssignment?.projectCode ?? next.billableProjectCode,
+        billableProjectAllocationId: String(billableAssignment.allocationId),
+        billableProjectName: billableAssignment.projectName,
+        billableProjectCode: billableAssignment.projectCode,
       };
     }
-    if (nonBillableId && !next.nonBillableProjectAllocationId) {
+    if (nonBillableAssignment && !next.nonBillableProjectAllocationId) {
       next = {
         ...next,
-        nonBillableProjectAllocationId: nonBillableId,
-        nonBillableProjectName: nonBillableAssignment?.projectName ?? next.nonBillableProjectName,
-        nonBillableProjectCode: nonBillableAssignment?.projectCode ?? next.nonBillableProjectCode,
+        nonBillableProjectAllocationId: String(nonBillableAssignment.allocationId),
+        nonBillableProjectName: nonBillableAssignment.projectName,
+        nonBillableProjectCode: nonBillableAssignment.projectCode,
       };
     }
     return next;
-  });
-}
-
-function applyAllocationToAllDays(
-    days: DraftDay[],
-    type: "billable" | "nonBillable",
-    allocationId: string,
-    assignment: AttendanceAssignment | undefined
-): DraftDay[] {
-  return days.map((day) => {
-    if (day.weekend || day.leaveDay || !day.editable) return day;
-    if (type === "billable") {
-      return {
-        ...day,
-        billableProjectAllocationId: allocationId,
-        billableProjectName: assignment?.projectName ?? null,
-        billableProjectCode: assignment?.projectCode ?? null,
-      };
-    }
-    return {
-      ...day,
-      nonBillableProjectAllocationId: allocationId,
-      nonBillableProjectName: assignment?.projectName ?? null,
-      nonBillableProjectCode: assignment?.projectCode ?? null,
-    };
   });
 }
 
@@ -268,10 +220,6 @@ export default function AttendancePage() {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
   const [weekData, setWeekData] = useState<AttendanceWeek | null>(null);
   const [draftDays, setDraftDays] = useState<DraftDay[]>([]);
-  const [selectedBillableAllocationId, setSelectedBillableAllocationId] = useState("");
-  const [selectedNonBillableAllocationId, setSelectedNonBillableAllocationId] = useState("");
-  const [billableMixed, setBillableMixed] = useState(false);
-  const [nonBillableMixed, setNonBillableMixed] = useState(false);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -300,32 +248,11 @@ export default function AttendancePage() {
       setApprovedEditEnabled(false);
 
       const nextDraftDays = weekResult.days.length > 0 ? createDraftDays(weekResult.days) : emptyDraftDays(weekStart);
-
-      const billableDerived = deriveDominantAllocationId(nextDraftDays, "billableProjectAllocationId");
-      const nonBillableDerived = deriveDominantAllocationId(nextDraftDays, "nonBillableProjectAllocationId");
-
-      let initialBillableId = billableDerived.value;
-      if (!initialBillableId && weekResult.billableAssignments.length === 1) {
-        initialBillableId = String(weekResult.billableAssignments[0].allocationId);
-      }
-      let initialNonBillableId = nonBillableDerived.value;
-      if (!initialNonBillableId && weekResult.nonBillableAssignments.length === 1) {
-        initialNonBillableId = String(weekResult.nonBillableAssignments[0].allocationId);
-      }
-
-      const filledDays = fillAllocationGaps(
+      setDraftDays(fillAllocationGaps(
           nextDraftDays,
-          billableDerived.mixed ? "" : initialBillableId,
-          nonBillableDerived.mixed ? "" : initialNonBillableId,
           weekResult.billableAssignments,
           weekResult.nonBillableAssignments
-      );
-
-      setDraftDays(filledDays);
-      setSelectedBillableAllocationId(initialBillableId);
-      setSelectedNonBillableAllocationId(initialNonBillableId);
-      setBillableMixed(billableDerived.mixed);
-      setNonBillableMixed(nonBillableDerived.mixed);
+      ));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to load attendance week.");
     } finally {
@@ -376,20 +303,32 @@ export default function AttendancePage() {
     });
   };
 
-  const handleAllocationChange = (type: "billable" | "nonBillable", allocationId: string) => {
+  const handleAllocationChange = (index: number, type: "billable" | "nonBillable", allocationId: string) => {
     const assignments = type === "billable" ? weekData?.billableAssignments ?? [] : weekData?.nonBillableAssignments ?? [];
     const assignment = assignments.find((item) => String(item.allocationId) === allocationId);
-    setDraftDays((current) => applyAllocationToAllDays(current, type, allocationId, assignment));
-    if (type === "billable") {
-      setSelectedBillableAllocationId(allocationId);
-      setBillableMixed(false);
-    } else {
-      setSelectedNonBillableAllocationId(allocationId);
-      setNonBillableMixed(false);
-    }
+    setDraftDays((current) => current.map((day, dayIndex) => {
+      if (dayIndex !== index) return day;
+      if (type === "billable") {
+        return {
+          ...day,
+          billableProjectAllocationId: allocationId,
+          billableProjectName: assignment?.projectName ?? null,
+          billableProjectCode: assignment?.projectCode ?? null,
+          billableHours: allocationId ? day.billableHours : "",
+        };
+      }
+      return {
+        ...day,
+        nonBillableProjectAllocationId: allocationId,
+        nonBillableProjectName: assignment?.projectName ?? null,
+        nonBillableProjectCode: assignment?.projectCode ?? null,
+        nonBillableHours: allocationId ? day.nonBillableHours : "",
+      };
+    }));
   };
 
   const isApprovedSheet = weekData?.timesheet?.timesheetStatus === "APPROVED";
+  const isFriday = businessDayFormatter.format(new Date()) === "Fri";
   const canEditWeek = weekData?.editable ?? true;
   const canEditSheet = canEditWeek && (!isApprovedSheet || approvedEditEnabled);
 
@@ -417,9 +356,21 @@ export default function AttendancePage() {
 
   const handleSave = async (submit: boolean) => {
     if (!accessToken) return;
+    if (submit && !isFriday) {
+      toast.error("Timesheets can only be submitted on Friday. You can save a draft any day.");
+      return;
+    }
     const overCap = draftDays.some((day) => parseOptionalNumber(day.billableHours) > 8);
     if (overCap) {
       toast.error("Billable hours cannot exceed 8 hours per day.");
+      return;
+    }
+    const missingProject = draftDays.some((day) =>
+        (parseOptionalNumber(day.billableHours) > 0 && !day.billableProjectAllocationId)
+        || (parseOptionalNumber(day.nonBillableHours) > 0 && !day.nonBillableProjectAllocationId)
+    );
+    if (missingProject) {
+      toast.error("Choose an assigned project for each day with logged hours.");
       return;
     }
     if (isApprovedSheet && !approvedEditEnabled) {
@@ -487,7 +438,7 @@ export default function AttendancePage() {
   return (
       <>
         <PageHeader
-            description="Fill your weekly billable and non-billable hours in a few clicks."
+            description="Track daily hours against your assigned billable and non-billable projects."
             title="Attendance"
         />
 
@@ -564,7 +515,10 @@ export default function AttendancePage() {
 
           {isLoading ? (
               <div className="flex items-center justify-center rounded-2xl border border-zinc-200 bg-white py-16">
-                <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                <div className="flex flex-col items-center gap-2">
+                  <LoaderAnimation size="lg" />
+                  <span className="text-sm font-medium text-zinc-600">Loading this week&apos;s timesheet...</span>
+                </div>
               </div>
           ) : activeTab === "timesheet" ? (
               <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -580,88 +534,21 @@ export default function AttendancePage() {
                       </div>
                   ) : null}
 
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Briefcase className="h-5 w-5 text-blue-600" /> Project for this week
-                      </CardTitle>
-                      <CardDescription>Pick your project once — it applies to every day this week automatically.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="grid gap-4 sm:grid-cols-2">
-                      <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">Billable</p>
-                        {!weekData?.hasBillableAssignments ? (
-                            <p className="mt-2 text-sm text-zinc-600">No billable project assigned for this week.</p>
-                        ) : weekData.billableAssignments.length <= 1 ? (
-                            <p className="mt-2 text-base font-semibold text-zinc-950">
-                              {formatAssignmentLabel(
-                                  weekData.billableAssignments[0]?.projectName ?? null,
-                                  weekData.billableAssignments[0]?.projectCode ?? null
-                              )}
-                            </p>
-                        ) : (
-                            <>
-                              <select
-                                  className="mt-2 h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm text-zinc-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-zinc-100"
-                                  disabled={!canEditSheet}
-                                  onChange={(event: ChangeEvent<HTMLSelectElement>) =>
-                                      handleAllocationChange("billable", event.target.value)
-                                  }
-                                  value={selectedBillableAllocationId}
-                              >
-                                <option value="">Select project</option>
-                                {weekData.billableAssignments.map((assignment) => (
-                                    <option key={assignment.allocationId} value={assignment.allocationId}>
-                                      {assignment.projectName} ({assignment.projectCode})
-                                    </option>
-                                ))}
-                              </select>
-                              {billableMixed ? (
-                                  <p className="mt-2 text-xs text-amber-700">
-                                    Different projects were used on different days before — pick one to standardize the week.
-                                  </p>
-                              ) : null}
-                            </>
-                        )}
+                  <div className="flex flex-col gap-3 rounded-2xl border border-blue-100 bg-blue-50/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-xl bg-white p-2 text-blue-600 shadow-sm">
+                        <Briefcase className="h-4 w-4" />
                       </div>
-                      <div className="rounded-2xl border border-cyan-100 bg-cyan-50/60 p-4">
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">Non-billable</p>
-                        {(weekData?.nonBillableAssignments.length ?? 0) === 0 ? (
-                            <p className="mt-2 text-sm text-zinc-600">No non-billable project assigned for this week.</p>
-                        ) : weekData!.nonBillableAssignments.length <= 1 ? (
-                            <p className="mt-2 text-base font-semibold text-zinc-950">
-                              {formatAssignmentLabel(
-                                  weekData!.nonBillableAssignments[0]?.projectName ?? null,
-                                  weekData!.nonBillableAssignments[0]?.projectCode ?? null
-                              )}
-                            </p>
-                        ) : (
-                            <>
-                              <select
-                                  className="mt-2 h-10 w-full rounded-xl border border-cyan-200 bg-white px-3 text-sm text-zinc-900 shadow-sm outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500 disabled:cursor-not-allowed disabled:bg-zinc-100"
-                                  disabled={!canEditSheet}
-                                  onChange={(event: ChangeEvent<HTMLSelectElement>) =>
-                                      handleAllocationChange("nonBillable", event.target.value)
-                                  }
-                                  value={selectedNonBillableAllocationId}
-                              >
-                                <option value="">Select project</option>
-                                {weekData!.nonBillableAssignments.map((assignment) => (
-                                    <option key={assignment.allocationId} value={assignment.allocationId}>
-                                      {assignment.projectName} ({assignment.projectCode})
-                                    </option>
-                                ))}
-                              </select>
-                              {nonBillableMixed ? (
-                                  <p className="mt-2 text-xs text-amber-700">
-                                    Different projects were used on different days before — pick one to standardize the week.
-                                  </p>
-                              ) : null}
-                            </>
-                        )}
+                      <div>
+                        <p className="text-sm font-semibold text-zinc-900">Project assignments</p>
+                        <p className="mt-0.5 text-xs text-zinc-600">Choose the assigned billable and non-billable project for each day.</p>
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                    <div className="flex flex-wrap gap-2 sm:justify-end">
+                      <Badge className="border-blue-200 bg-white text-blue-700">{weekData?.billableAssignments.length ?? 0} billable</Badge>
+                      <Badge className="border-cyan-200 bg-white text-cyan-700">{weekData?.nonBillableAssignments.length ?? 0} non-billable</Badge>
+                    </div>
+                  </div>
 
                   <Card>
                     <CardHeader>
@@ -674,18 +561,26 @@ export default function AttendancePage() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="overflow-x-auto rounded-2xl border border-zinc-200">
-                        <table className="w-full min-w-[560px] text-sm">
+                        <table className="w-full min-w-[1040px] text-sm">
                           <thead className="bg-zinc-50 text-left text-zinc-600">
                           <tr>
                             <th className="px-4 py-3 font-medium">Day</th>
-                            <th className="px-4 py-3 font-medium">Billable (hrs)</th>
-                            <th className="px-4 py-3 font-medium">Non-billable (hrs)</th>
+                            <th className="px-4 py-3 font-medium">Billable project</th>
+                            <th className="px-4 py-3 font-medium">Billable hours</th>
+                            <th className="px-4 py-3 font-medium">Non-billable project</th>
+                            <th className="px-4 py-3 font-medium">Non-billable hours</th>
                             <th className="px-4 py-3 text-right font-medium">Total</th>
                           </tr>
                           </thead>
                           <tbody>
                           {draftDays.map((day, index) => {
                             const dayLocked = !canEditSheet || !day.editable;
+                            const billableAssignments = weekData?.billableAssignments ?? [];
+                            const nonBillableAssignments = weekData?.nonBillableAssignments ?? [];
+                            const billableSelectionUnavailable = day.billableProjectAllocationId
+                                && !billableAssignments.some((assignment) => String(assignment.allocationId) === day.billableProjectAllocationId);
+                            const nonBillableSelectionUnavailable = day.nonBillableProjectAllocationId
+                                && !nonBillableAssignments.some((assignment) => String(assignment.allocationId) === day.nonBillableProjectAllocationId);
                             const total = parseOptionalNumber(day.billableHours) + parseOptionalNumber(day.nonBillableHours);
                             return (
                                 <tr
@@ -713,9 +608,30 @@ export default function AttendancePage() {
                                     </div>
                                   </td>
                                   <td className="px-4 py-3">
+                                    <select
+                                        aria-label={`${day.dayLabel} billable project`}
+                                        className="h-10 w-56 rounded-xl border border-blue-200 bg-white px-3 text-sm text-zinc-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-zinc-100"
+                                        disabled={dayLocked || billableAssignments.length === 0}
+                                        onChange={(event: ChangeEvent<HTMLSelectElement>) => handleAllocationChange(index, "billable", event.target.value)}
+                                        value={day.billableProjectAllocationId}
+                                    >
+                                      <option value="">{billableAssignments.length ? "Select billable project" : "No billable assignment"}</option>
+                                      {billableSelectionUnavailable ? (
+                                          <option value={day.billableProjectAllocationId}>
+                                            {formatAssignmentLabel(day.billableProjectName, day.billableProjectCode)} (previous assignment)
+                                          </option>
+                                      ) : null}
+                                      {billableAssignments.map((assignment) => (
+                                          <option key={assignment.allocationId} value={assignment.allocationId}>
+                                            {assignment.projectName} ({assignment.projectCode})
+                                          </option>
+                                      ))}
+                                    </select>
+                                  </td>
+                                  <td className="px-4 py-3">
                                     <Input
                                         className="w-24"
-                                        disabled={dayLocked}
+                                        disabled={dayLocked || billableAssignments.length === 0}
                                         max="8"
                                         min="0"
                                         onChange={(event) => updateDay(index, "billableHours", event.target.value)}
@@ -725,9 +641,30 @@ export default function AttendancePage() {
                                     />
                                   </td>
                                   <td className="px-4 py-3">
+                                    <select
+                                        aria-label={`${day.dayLabel} non-billable project`}
+                                        className="h-10 w-56 rounded-xl border border-cyan-200 bg-white px-3 text-sm text-zinc-900 shadow-sm outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500 disabled:cursor-not-allowed disabled:bg-zinc-100"
+                                        disabled={dayLocked || nonBillableAssignments.length === 0}
+                                        onChange={(event: ChangeEvent<HTMLSelectElement>) => handleAllocationChange(index, "nonBillable", event.target.value)}
+                                        value={day.nonBillableProjectAllocationId}
+                                    >
+                                      <option value="">{nonBillableAssignments.length ? "Select non-billable project" : "No non-billable assignment"}</option>
+                                      {nonBillableSelectionUnavailable ? (
+                                          <option value={day.nonBillableProjectAllocationId}>
+                                            {formatAssignmentLabel(day.nonBillableProjectName, day.nonBillableProjectCode)} (previous assignment)
+                                          </option>
+                                      ) : null}
+                                      {nonBillableAssignments.map((assignment) => (
+                                          <option key={assignment.allocationId} value={assignment.allocationId}>
+                                            {assignment.projectName} ({assignment.projectCode})
+                                          </option>
+                                      ))}
+                                    </select>
+                                  </td>
+                                  <td className="px-4 py-3">
                                     <Input
                                         className="w-24"
-                                        disabled={dayLocked}
+                                        disabled={dayLocked || nonBillableAssignments.length === 0}
                                         min="0"
                                         onChange={(event) => updateDay(index, "nonBillableHours", event.target.value)}
                                         step="0.25"
@@ -743,7 +680,9 @@ export default function AttendancePage() {
                           <tfoot>
                           <tr className="border-t border-zinc-200 bg-zinc-50 font-semibold text-zinc-900">
                             <td className="px-4 py-3">Weekly total</td>
+                            <td />
                             <td className="px-4 py-3">{billableTotal.toFixed(2)}</td>
+                            <td />
                             <td className="px-4 py-3">{nonBillableTotal.toFixed(2)}</td>
                             <td className="px-4 py-3 text-right">{(billableTotal + nonBillableTotal).toFixed(2)}</td>
                           </tr>
@@ -756,6 +695,9 @@ export default function AttendancePage() {
                       <span className="flex items-center gap-1">
                         <LockKeyhole className="h-3.5 w-3.5" /> Billable hours are capped at 8/day.
                       </span>
+                          <span className="flex items-center gap-1">
+                            <CalendarDays className="h-3.5 w-3.5" /> Save drafts any day; submit on Friday.
+                          </span>
                           <span className="flex items-center gap-1">
                         <ShieldCheck className="h-3.5 w-3.5" />{" "}
                             {canEditWeek ? "Within editable window." : "Read only — older than 30 days."}
@@ -770,7 +712,7 @@ export default function AttendancePage() {
                             )}
                             Save draft
                           </Button>
-                          <Button disabled={isSubmitting || !canEditSheet} onClick={() => void handleSave(true)}>
+                          <Button disabled={isSubmitting || !canEditSheet || !isFriday} onClick={() => void handleSave(true)}>
                             {isSubmitting ? (
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                             ) : (
