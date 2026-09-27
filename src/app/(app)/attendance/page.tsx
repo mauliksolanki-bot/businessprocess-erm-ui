@@ -17,7 +17,6 @@ import {
   PencilLine,
   ShieldCheck,
   ShieldX,
-  Users2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -329,6 +328,8 @@ export default function AttendancePage() {
 
   const isApprovedSheet = weekData?.timesheet?.timesheetStatus === "APPROVED";
   const isFriday = businessDayFormatter.format(new Date()) === "Fri";
+  const hasBillableAssignments = (weekData?.billableAssignments.length ?? 0) > 0;
+  const hasNonBillableAssignments = (weekData?.nonBillableAssignments.length ?? 0) > 0;
   const canEditWeek = weekData?.editable ?? true;
   const canEditSheet = canEditWeek && (!isApprovedSheet || approvedEditEnabled);
 
@@ -345,10 +346,10 @@ export default function AttendancePage() {
     weekStartDate: weekStartIso,
     days: draftDays.map((day) => ({
       workDate: day.workDate,
-      billableHours: parseOptionalNumber(day.billableHours),
-      nonBillableHours: parseOptionalNumber(day.nonBillableHours),
-      billableProjectAllocationId: day.billableProjectAllocationId ? Number(day.billableProjectAllocationId) : null,
-      nonBillableProjectAllocationId: day.nonBillableProjectAllocationId
+      billableHours: hasBillableAssignments ? parseOptionalNumber(day.billableHours) : 0,
+      nonBillableHours: hasNonBillableAssignments ? parseOptionalNumber(day.nonBillableHours) : 0,
+      billableProjectAllocationId: hasBillableAssignments && day.billableProjectAllocationId ? Number(day.billableProjectAllocationId) : null,
+      nonBillableProjectAllocationId: hasNonBillableAssignments && day.nonBillableProjectAllocationId
           ? Number(day.nonBillableProjectAllocationId)
           : null,
     })),
@@ -360,14 +361,14 @@ export default function AttendancePage() {
       toast.error("Timesheets can only be submitted on Friday. You can save a draft any day.");
       return;
     }
-    const overCap = draftDays.some((day) => parseOptionalNumber(day.billableHours) > 8);
+    const overCap = hasBillableAssignments && draftDays.some((day) => parseOptionalNumber(day.billableHours) > 8);
     if (overCap) {
       toast.error("Billable hours cannot exceed 8 hours per day.");
       return;
     }
     const missingProject = draftDays.some((day) =>
-        (parseOptionalNumber(day.billableHours) > 0 && !day.billableProjectAllocationId)
-        || (parseOptionalNumber(day.nonBillableHours) > 0 && !day.nonBillableProjectAllocationId)
+        (hasBillableAssignments && parseOptionalNumber(day.billableHours) > 0 && !day.billableProjectAllocationId)
+        || (hasNonBillableAssignments && parseOptionalNumber(day.nonBillableHours) > 0 && !day.nonBillableProjectAllocationId)
     );
     if (missingProject) {
       toast.error("Choose an assigned project for each day with logged hours.");
@@ -438,7 +439,7 @@ export default function AttendancePage() {
   return (
       <>
         <PageHeader
-            description="Track daily hours against your assigned billable and non-billable projects."
+            description="Track daily hours against your assigned projects."
             title="Attendance"
         />
 
@@ -465,8 +466,8 @@ export default function AttendancePage() {
             </CardContent>
           </Card>
 
-          <section className="grid gap-4 md:grid-cols-3">
-            <Card>
+          <section className={`grid gap-4 ${hasBillableAssignments && hasNonBillableAssignments ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
+            {hasBillableAssignments ? <Card>
               <CardHeader className="pb-2">
                 <CardDescription>Billable hours</CardDescription>
                 <CardTitle className="text-2xl">{billableTotal.toFixed(2)}</CardTitle>
@@ -474,14 +475,14 @@ export default function AttendancePage() {
               <CardContent className="text-sm text-zinc-600">
                 {weekData?.hasBillableAssignments ? "Logged for this week." : "No billable assignment for this week."}
               </CardContent>
-            </Card>
-            <Card>
+            </Card> : null}
+            {hasNonBillableAssignments ? <Card>
               <CardHeader className="pb-2">
                 <CardDescription>Non-billable hours</CardDescription>
                 <CardTitle className="text-2xl">{nonBillableTotal.toFixed(2)}</CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-zinc-600">Internal work logged for this week.</CardContent>
-            </Card>
+            </Card> : null}
             <Card>
               <CardHeader className="pb-2">
                 <CardDescription>Status</CardDescription>
@@ -521,7 +522,7 @@ export default function AttendancePage() {
                 </div>
               </div>
           ) : activeTab === "timesheet" ? (
-              <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="grid gap-6">
                 <div className="space-y-6">
                   {isApprovedSheet && !approvedEditEnabled ? (
                       <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -541,12 +542,16 @@ export default function AttendancePage() {
                       </div>
                       <div>
                         <p className="text-sm font-semibold text-zinc-900">Project assignments</p>
-                        <p className="mt-0.5 text-xs text-zinc-600">Choose the assigned billable and non-billable project for each day.</p>
+                        <p className="mt-0.5 text-xs text-zinc-600">
+                          {hasBillableAssignments || hasNonBillableAssignments
+                              ? "Choose an assigned project for each day."
+                              : "No projects are assigned for this week."}
+                        </p>
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2 sm:justify-end">
-                      <Badge className="border-blue-200 bg-white text-blue-700">{weekData?.billableAssignments.length ?? 0} billable</Badge>
-                      <Badge className="border-cyan-200 bg-white text-cyan-700">{weekData?.nonBillableAssignments.length ?? 0} non-billable</Badge>
+                      {hasBillableAssignments ? <Badge className="border-blue-200 bg-white text-blue-700">{weekData?.billableAssignments.length ?? 0} billable</Badge> : null}
+                      {hasNonBillableAssignments ? <Badge className="border-cyan-200 bg-white text-cyan-700">{weekData?.nonBillableAssignments.length ?? 0} non-billable</Badge> : null}
                     </div>
                   </div>
 
@@ -556,19 +561,29 @@ export default function AttendancePage() {
                         <ClipboardList className="h-5 w-5 text-blue-600" /> Weekly hours
                       </CardTitle>
                       <CardDescription>
-                        Enter billable and non-billable hours for each day. Weekends and approved leave are locked automatically.
+                        {hasBillableAssignments && hasNonBillableAssignments
+                            ? "Enter billable and non-billable hours for each day."
+                            : hasBillableAssignments
+                                ? "Enter billable hours for each day."
+                                : hasNonBillableAssignments
+                                    ? "Enter non-billable hours for each day."
+                                    : "No project hours can be entered until a project is assigned."} Weekends and approved leave are locked automatically.
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="overflow-x-auto rounded-2xl border border-zinc-200">
-                        <table className="w-full min-w-[1040px] text-sm">
+                        <table className={`w-full text-sm ${hasBillableAssignments && hasNonBillableAssignments ? "min-w-[1040px]" : hasBillableAssignments || hasNonBillableAssignments ? "min-w-[760px]" : "min-w-[420px]"}`}>
                           <thead className="bg-zinc-50 text-left text-zinc-600">
                           <tr>
                             <th className="px-4 py-3 font-medium">Day</th>
-                            <th className="px-4 py-3 font-medium">Billable project</th>
-                            <th className="px-4 py-3 font-medium">Billable hours</th>
-                            <th className="px-4 py-3 font-medium">Non-billable project</th>
-                            <th className="px-4 py-3 font-medium">Non-billable hours</th>
+                            {hasBillableAssignments ? <>
+                              <th className="px-4 py-3 font-medium">Billable project</th>
+                              <th className="px-4 py-3 font-medium">Billable hours</th>
+                            </> : null}
+                            {hasNonBillableAssignments ? <>
+                              <th className="px-4 py-3 font-medium">Non-billable project</th>
+                              <th className="px-4 py-3 font-medium">Non-billable hours</th>
+                            </> : null}
                             <th className="px-4 py-3 text-right font-medium">Total</th>
                           </tr>
                           </thead>
@@ -581,7 +596,8 @@ export default function AttendancePage() {
                                 && !billableAssignments.some((assignment) => String(assignment.allocationId) === day.billableProjectAllocationId);
                             const nonBillableSelectionUnavailable = day.nonBillableProjectAllocationId
                                 && !nonBillableAssignments.some((assignment) => String(assignment.allocationId) === day.nonBillableProjectAllocationId);
-                            const total = parseOptionalNumber(day.billableHours) + parseOptionalNumber(day.nonBillableHours);
+                            const total = (hasBillableAssignments ? parseOptionalNumber(day.billableHours) : 0)
+                                + (hasNonBillableAssignments ? parseOptionalNumber(day.nonBillableHours) : 0);
                             return (
                                 <tr
                                     className={`border-t border-zinc-100 ${
@@ -607,6 +623,7 @@ export default function AttendancePage() {
                                       </div>
                                     </div>
                                   </td>
+                                  {hasBillableAssignments ? <>
                                   <td className="px-4 py-3">
                                     <select
                                         aria-label={`${day.dayLabel} billable project`}
@@ -640,6 +657,8 @@ export default function AttendancePage() {
                                         value={day.billableHours}
                                     />
                                   </td>
+                                  </> : null}
+                                  {hasNonBillableAssignments ? <>
                                   <td className="px-4 py-3">
                                     <select
                                         aria-label={`${day.dayLabel} non-billable project`}
@@ -672,6 +691,7 @@ export default function AttendancePage() {
                                         value={day.nonBillableHours}
                                     />
                                   </td>
+                                  </> : null}
                                   <td className="px-4 py-3 text-right font-semibold text-zinc-900">{total.toFixed(2)}</td>
                                 </tr>
                             );
@@ -680,11 +700,15 @@ export default function AttendancePage() {
                           <tfoot>
                           <tr className="border-t border-zinc-200 bg-zinc-50 font-semibold text-zinc-900">
                             <td className="px-4 py-3">Weekly total</td>
-                            <td />
-                            <td className="px-4 py-3">{billableTotal.toFixed(2)}</td>
-                            <td />
-                            <td className="px-4 py-3">{nonBillableTotal.toFixed(2)}</td>
-                            <td className="px-4 py-3 text-right">{(billableTotal + nonBillableTotal).toFixed(2)}</td>
+                            {hasBillableAssignments ? <>
+                              <td />
+                              <td className="px-4 py-3">{billableTotal.toFixed(2)}</td>
+                            </> : null}
+                            {hasNonBillableAssignments ? <>
+                              <td />
+                              <td className="px-4 py-3">{nonBillableTotal.toFixed(2)}</td>
+                            </> : null}
+                            <td className="px-4 py-3 text-right">{((hasBillableAssignments ? billableTotal : 0) + (hasNonBillableAssignments ? nonBillableTotal : 0)).toFixed(2)}</td>
                           </tr>
                           </tfoot>
                         </table>
@@ -726,33 +750,6 @@ export default function AttendancePage() {
                   </Card>
                 </div>
 
-                <div className="space-y-6">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Users2 className="h-5 w-5 text-blue-600" /> Rules &amp; availability
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3 text-sm text-zinc-600">
-                      <p className="flex items-start gap-2">
-                        <CalendarDays className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-600" /> Weekends and approved leave are
-                        locked automatically and cannot be edited.
-                      </p>
-                      <p className="flex items-start gap-2">
-                        <LockKeyhole className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-600" /> Billable hours cannot exceed 8
-                        hours in a single day.
-                      </p>
-                      <p className="flex items-start gap-2">
-                        <ShieldCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-600" /> Timesheets can only be edited
-                        within 30 days of the work week.
-                      </p>
-                      <p className="flex items-start gap-2">
-                        <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-600" /> Once approved, editing needs an
-                        explicit confirmation since it may affect billing.
-                      </p>
-                    </CardContent>
-                  </Card>
-                </div>
               </div>
           ) : (
               <Card>
