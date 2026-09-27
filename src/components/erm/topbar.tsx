@@ -296,7 +296,7 @@ export function Topbar({ user, onLogout, notifications, notificationError }: Top
                           label="Reporting manager"
                           value={user.reportingManagerFullName || user.reportingManagerRoleName || "-"}
                       />
-                      <DetailRow label="Assigned Junior HR" value={user.juniorHrFullName || "-"} />
+                      <DetailRow label="HRBP" value={user.juniorHrFullName ? `${user.juniorHrFullName}${user.juniorHrRoleName ? ` (${user.juniorHrRoleName})` : ""}` : "-"} />
                       <div>
                         <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">Assigned roles</p>
                         <div className="flex flex-wrap gap-2">

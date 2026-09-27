@@ -141,7 +141,7 @@ function validateRequestForm(form: RequestForm) {
     return "Reporting manager is required.";
   }
   if (!form.juniorHrUserId.trim()) {
-    return "Assigned Junior HR is required.";
+    return "HRBP is required.";
   }
   if (form.comment.trim().length > 500) {
     return "Comment cannot be more than 500 characters.";
@@ -325,23 +325,23 @@ export default function OnboardingPage() {
       [accessToken]
   );
 
-  const loadJuniorHrOptions = useCallback(async () => {
+  const loadJuniorHrOptions = useCallback(async (designationRoleName: string) => {
     const token = accessToken();
-    if (!token) return;
+    if (!token || !designationRoleName) {
+      setJuniorHrOptions([]);
+      setLoadingJuniorHrOptions(false);
+      return;
+    }
     setLoadingJuniorHrOptions(true);
     try {
-      setJuniorHrOptions(await getJuniorHrOptions(token));
+      setJuniorHrOptions(await getJuniorHrOptions(token, designationRoleName));
     } catch {
       setJuniorHrOptions([]);
-      toast.error("Unable to load Junior HR options.");
+      toast.error("Unable to load HRBP options.");
     } finally {
       setLoadingJuniorHrOptions(false);
     }
   }, [accessToken]);
-
-  useEffect(() => {
-    if (canCreate) void loadJuniorHrOptions();
-  }, [canCreate, loadJuniorHrOptions]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -508,7 +508,10 @@ export default function OnboardingPage() {
     setEditingRequestId(request.id);
     setForm(toFormFromRequest(request));
     await loadDesignationOptions();
-    await loadManagerOptions(request.designationRoleName);
+    await Promise.all([
+      loadManagerOptions(request.designationRoleName),
+      loadJuniorHrOptions(request.designationRoleName),
+    ]);
   }
 
   function cancelEditRequest() {
@@ -745,8 +748,10 @@ export default function OnboardingPage() {
                             ...current,
                             designationRoleName: value,
                             reportingManagerUserId: "",
+                            juniorHrUserId: "",
                           }));
                           void loadManagerOptions(value);
+                          void loadJuniorHrOptions(value);
                         }}
                         onFocus={() => {
                           if (designationOptions.length === 0) {
@@ -777,12 +782,12 @@ export default function OnboardingPage() {
                     </FloatingSelect>
                     <FloatingSelect
                         className="md:col-span-2"
-                        label="Assigned Junior HR *"
+                        label="HRBP *"
                         value={form.juniorHrUserId}
                         onChange={(value) => setForm((current) => ({ ...current, juniorHrUserId: value }))}
-                        disabled={loadingJuniorHrOptions}
+                        disabled={!form.designationRoleName || loadingJuniorHrOptions || juniorHrOptions.length === 0}
                     >
-                      <option value="">{loadingJuniorHrOptions ? "Loading Junior HR options..." : "Select Junior HR"}</option>
+                      <option value="">{loadingJuniorHrOptions ? "Loading HRBP options..." : "Select HRBP"}</option>
                       {juniorHrOptions.map((juniorHr) => (
                           <option key={juniorHr.id} value={String(juniorHr.id)}>
                             {juniorHr.fullName} ({juniorHr.username})
@@ -853,7 +858,7 @@ export default function OnboardingPage() {
                                   <p className="text-xs text-zinc-500">{request.phoneNumber}</p>
                                   <p className="text-xs text-zinc-600">
                                     Manager: {request.reportingManagerFullName ?? "-"} ({request.reportingManagerRoleName ?? "-"})
-                                    <span className="block">Junior HR: {request.juniorHrFullName ?? "-"}</span>
+                                    <span className="block">HRBP: {request.juniorHrFullName ?? "-"}{request.juniorHrRoleName ? ` (${request.juniorHrRoleName})` : ""}</span>
                                   </p>
                                 </td>
                                 <td className="px-4 py-3">
@@ -1063,8 +1068,8 @@ export default function OnboardingPage() {
                       </p>
                     </div>
                     <div className="rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 via-white to-blue-50 p-3 text-sm text-zinc-700">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600">Assigned Junior HR</p>
-                      <p className="mt-1 font-semibold text-zinc-900">{viewRequest.juniorHrFullName ?? "-"}</p>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600">HRBP</p>
+                      <p className="mt-1 font-semibold text-zinc-900">{viewRequest.juniorHrFullName ?? "-"}{viewRequest.juniorHrRoleName ? ` (${viewRequest.juniorHrRoleName})` : ""}</p>
                     </div>
                     <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-3 text-sm text-zinc-700">
                       <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Education</p>

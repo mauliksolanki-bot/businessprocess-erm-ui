@@ -27,6 +27,7 @@ import {
   getProjectDeliveryManagerOptions,
   getProjectDirectorOptions,
   getProjectManagerOptions,
+  getProjectHrOptions,
   getProjectMasterProjects,
   getProjectOwnerOptions,
   getProjectRequests,
@@ -40,6 +41,7 @@ import {
   type ManagedProject,
   type ProjectChangeRequest,
   type ProjectManagerOption,
+  type ProjectHrOption,
   type ProjectAllocation,
   type ProjectAllocationEmployeeOption,
   type ProjectAllocationProjectOption,
@@ -63,6 +65,7 @@ type ProjectForm = {
   projectOwnerUserId: string;
   projectDirectorUserId: string;
   projectManagerUserId: string;
+  associatedHrUserId: string;
   projectStatus: ProjectStatus | "";
   description: string;
   riskNotes: string;
@@ -121,6 +124,7 @@ const initialForm: ProjectForm = {
   projectOwnerUserId: "",
   projectDirectorUserId: "",
   projectManagerUserId: "",
+  associatedHrUserId: "",
   projectStatus: "Planned",
   description: "",
   riskNotes: "",
@@ -216,6 +220,7 @@ export default function ProjectsPage() {
   const [projectOwners, setProjectOwners] = useState<ProjectManagerOption[]>([]);
   const [projectDirectors, setProjectDirectors] = useState<ProjectManagerOption[]>([]);
   const [projectManagers, setProjectManagers] = useState<ProjectManagerOption[]>([]);
+  const [projectHrOptions, setProjectHrOptions] = useState<ProjectHrOption[]>([]);
   const [allocationForm, setAllocationForm] = useState<AllocationForm>(initialAllocationForm);
   const [allocationRequests, setAllocationRequests] = useState<ProjectAllocation[]>([]);
   const [managedProjects, setManagedProjects] = useState<ManagedProject[]>([]);
@@ -427,6 +432,17 @@ export default function ProjectsPage() {
     }
   }, [accessToken]);
 
+  const loadProjectHrOptions = useCallback(async () => {
+    const token = accessToken();
+    if (!token) return;
+    try {
+      setProjectHrOptions(await getProjectHrOptions(token));
+    } catch {
+      setProjectHrOptions([]);
+      toast.error("Unable to load HRBP options.");
+    }
+  }, [accessToken]);
+
   const loadAllocationOptions = useCallback(async () => {
     const token = accessToken();
     if (!token) return;
@@ -635,6 +651,7 @@ export default function ProjectsPage() {
     if (!current.projectOwnerUserId) return "Project owner is required.";
     if (!current.projectDirectorUserId) return "Project director is required.";
     if (!current.projectManagerUserId) return "Project manager is required.";
+    if (!current.associatedHrUserId) return "HRBP is required.";
     if (!current.projectStatus) return "Project status is required.";
     if (current.description.trim().length < 20) return "Description must be at least 20 characters.";
     return null;
@@ -664,6 +681,7 @@ export default function ProjectsPage() {
       projectOwnerUserId: Number(form.projectOwnerUserId),
       projectDirectorUserId: Number(form.projectDirectorUserId),
       projectManagerUserId: Number(form.projectManagerUserId),
+      associatedHrUserId: Number(form.associatedHrUserId),
       projectStatus: form.projectStatus as ProjectStatus,
       description: form.description.trim(),
       riskNotes: form.riskNotes.trim() || undefined,
@@ -1062,6 +1080,7 @@ export default function ProjectsPage() {
       projectOwnerUserId: String(request.projectOwnerUserId),
       projectDirectorUserId: request.projectDirectorUserId ? String(request.projectDirectorUserId) : "",
       projectManagerUserId: request.projectManagerUserId ? String(request.projectManagerUserId) : "",
+      associatedHrUserId: String(request.associatedHrUserId),
       projectStatus: request.projectStatus,
       description: request.description,
       riskNotes: request.riskNotes ?? "",
@@ -1078,6 +1097,9 @@ export default function ProjectsPage() {
     }
     if (projectManagers.length === 0) {
       await loadProjectManagers();
+    }
+    if (projectHrOptions.length === 0) {
+      await loadProjectHrOptions();
     }
   }
 
@@ -1359,6 +1381,21 @@ export default function ProjectsPage() {
                             </option>
                         ))}
                       </Select>
+                      <Select
+                          label="HRBP *"
+                          value={form.associatedHrUserId}
+                          onChange={(v) => setForm((s) => ({ ...s, associatedHrUserId: v }))}
+                          onFocus={() => {
+                            if (projectHrOptions.length === 0) void loadProjectHrOptions();
+                          }}
+                      >
+                        <option value="">Select HRBP</option>
+                        {projectHrOptions.map((hr) => (
+                            <option key={hr.id} value={String(hr.id)}>
+                              {hr.fullName} ({hr.roleName})
+                            </option>
+                        ))}
+                      </Select>
                       <Select label="Project Status *" value={form.projectStatus} onChange={(v) => setForm((s) => ({ ...s, projectStatus: v as ProjectStatus | "" }))}>
                         <option value="">Select project status</option>
                         {projectStatuses.map((status) => (
@@ -1463,6 +1500,7 @@ export default function ProjectsPage() {
                                   <p className="font-semibold text-zinc-900">{request.projectName}</p>
                                   <p className="text-xs text-zinc-600">{request.projectCode}</p>
                                   <p className="text-xs text-zinc-500">Requester: {request.createdByUsername}</p>
+                                  <p className="text-xs text-indigo-700">HRBP: {request.associatedHrName} ({request.associatedHrRoleName})</p>
                                 </td>
                                 <td className="px-4 py-3">
                                   <p className="text-sm text-zinc-800">{request.clientName}</p>
@@ -1638,6 +1676,7 @@ export default function ProjectsPage() {
                                 <td className="px-4 py-3 text-xs text-zinc-700">
                                   <p>Owner: {project.projectOwnerName}</p>
                                   <p>DM: {project.deliveryManagerName}</p>
+                                  <p>HRBP: {project.associatedHrName} ({project.associatedHrRoleName})</p>
                                 </td>
                                 <td className="px-4 py-3">
                                   <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${stageClass(project.projectStatus)}`}>{project.projectStatus}</span>
@@ -1855,6 +1894,7 @@ export default function ProjectsPage() {
                                 <p>Director: {project.projectDirectorName || "-"}</p>
                                 <p>Manager: {project.projectManagerName || "-"}</p>
                                 <p>Delivery: {project.deliveryManagerName}</p>
+                                <p>HRBP: {project.associatedHrName} ({project.associatedHrRoleName})</p>
                               </td>
                               <td className="px-4 py-3 text-xs text-zinc-700">
                                 <p>{project.projectType}</p>
@@ -2353,6 +2393,10 @@ export default function ProjectsPage() {
                     <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-3 text-sm text-zinc-700">
                       <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Client</p>
                       <p className="mt-1 font-medium text-zinc-900">{viewRequest.clientName}</p>
+                    </div>
+                    <div className="rounded-2xl border border-indigo-200 bg-indigo-50/70 p-3 text-sm text-zinc-700">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-indigo-700">HRBP</p>
+                      <p className="mt-1 font-medium text-zinc-900">{viewRequest.associatedHrName} ({viewRequest.associatedHrRoleName})</p>
                     </div>
                     <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-3 text-sm text-zinc-700">
                       <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Priority</p>

@@ -81,6 +81,7 @@ export default function EmployeesPage() {
   const [designationOptions, setDesignationOptions] = useState<OnboardingDesignationOption[]>([]);
   const [managerOptions, setManagerOptions] = useState<OnboardingManagerOption[]>([]);
   const [juniorHrOptions, setJuniorHrOptions] = useState<OnboardingManagerOption[]>([]);
+  const [isLoadingHrContacts, setIsLoadingHrContacts] = useState(false);
   const [managerRoleName, setManagerRoleName] = useState("");
   const [isLoadingManagers, setIsLoadingManagers] = useState(false);
   const [directReports, setDirectReports] = useState<EmployeeDirectReport[]>([]);
@@ -162,12 +163,15 @@ export default function EmployeesPage() {
     resetPromotionReassignmentState();
 
     try {
-      const promises: [Promise<Employee>, Promise<OnboardingDesignationOption[]>?, Promise<OnboardingManagerOption[]>?] = [getEmployeeById(accessToken, employeeId)];
+      const employee = await getEmployeeById(accessToken, employeeId);
+      let designations: OnboardingDesignationOption[] | undefined;
+      let juniorHrs: OnboardingManagerOption[] | undefined;
       if (mode === "edit" && hasSeniorHrRole) {
-        promises.push(getOnboardingDesignationOptions(accessToken));
-        promises.push(getJuniorHrOptions(accessToken));
+        [designations, juniorHrs] = await Promise.all([
+          getOnboardingDesignationOptions(accessToken),
+          getJuniorHrOptions(accessToken, getEmployeeDesignation(employee)),
+        ]);
       }
-      const [employee, designations, juniorHrs] = await Promise.all(promises);
       setDialogEmployee(employee);
       setJuniorHrOptions(juniorHrs ?? []);
 
@@ -243,18 +247,37 @@ export default function EmployeesPage() {
 
     if (!requiresReassignment) {
       resetPromotionReassignmentState();
-      await loadManagerOptions(designationRoleName);
+      setIsLoadingHrContacts(true);
+      try {
+        const [managerResponse, hrOptions] = await Promise.all([
+          getOnboardingManagerOptions(accessToken, designationRoleName.trim()),
+          getJuniorHrOptions(accessToken, designationRoleName.trim()),
+        ]);
+        setManagerRoleName(managerResponse.managerRoleName);
+        setManagerOptions(managerResponse.managers);
+        setJuniorHrOptions(hrOptions);
+      } catch {
+        setManagerRoleName("");
+        setManagerOptions([]);
+        setJuniorHrOptions([]);
+        toast.error("Unable to load designation contacts.");
+      } finally {
+        setIsLoadingHrContacts(false);
+      }
       return;
     }
 
     setIsLoadingPromotionReassignment(true);
+    setIsLoadingHrContacts(true);
     try {
-      const [nextManagerOptions, nextDirectReports] = await Promise.all([
+      const [nextManagerOptions, nextDirectReports, nextHrOptions] = await Promise.all([
         getOnboardingManagerOptions(accessToken, designationRoleName.trim()),
         getEmployeeDirectReports(accessToken, dialogEmployee.id),
+        getJuniorHrOptions(accessToken, designationRoleName.trim()),
       ]);
       setManagerRoleName(nextManagerOptions.managerRoleName);
       setManagerOptions(nextManagerOptions.managers);
+      setJuniorHrOptions(nextHrOptions);
       setDirectReports(nextDirectReports);
 
       if (nextDirectReports.length > 0) {
@@ -268,6 +291,7 @@ export default function EmployeesPage() {
       toast.error("Unable to load promotion reassignment details.");
     } finally {
       setIsLoadingPromotionReassignment(false);
+      setIsLoadingHrContacts(false);
     }
   }
 
@@ -292,7 +316,7 @@ export default function EmployeesPage() {
           return;
         }
         if (!payload.juniorHrUserId) {
-          toast.error("Please select an assigned Junior HR.");
+          toast.error("Please select an HRBP.");
           return;
         }
         if (Number(payload.reportingManagerUserId) === employeeId) {
@@ -484,7 +508,7 @@ export default function EmployeesPage() {
                       <th className="px-4 py-3 font-medium">Employee</th>
                       <th className="px-4 py-3 font-medium">Roles</th>
                       <th className="px-4 py-3 font-medium">Department</th>
-                      <th className="px-4 py-3 font-medium">Assigned Junior HR</th>
+                      <th className="px-4 py-3 font-medium">HRBP</th>
                       <th className="px-4 py-3 font-medium">Status</th>
                       <th className="px-4 py-3 font-medium">Actions</th>
                     </tr>
@@ -528,7 +552,7 @@ export default function EmployeesPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-zinc-700">{employee.department}</td>
-                              <td className="px-4 py-3 text-zinc-700">{employee.juniorHrFullName ?? "-"}</td>
+                              <td className="px-4 py-3 text-zinc-700">{employee.juniorHrFullName ? `${employee.juniorHrFullName}${employee.juniorHrRoleName ? ` (${employee.juniorHrRoleName})` : ""}` : "-"}</td>
                               <td className="px-4 py-3">
                           <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass(employee.employmentStatus)}`}>
                             {employee.employmentStatus}
@@ -621,6 +645,7 @@ export default function EmployeesPage() {
                     designationOptions={designationOptions}
                     managerOptions={managerOptions}
                     juniorHrOptions={juniorHrOptions}
+                    juniorHrOptionsLoading={isLoadingHrContacts}
                     managerRoleName={managerRoleName}
                     managersLoading={isLoadingManagers}
                     managerEditable={hasSeniorHrRole}
