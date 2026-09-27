@@ -1,6 +1,6 @@
 /**
- * Legacy inline loading placeholder. API loading is shown once by the global
- * API loader so individual page sections do not render duplicate loaders.
+ * Inline loading placeholder. Visual loading feedback is reserved for the
+ * full-page route fallback so API activity does not add another loader.
  */
 export function Spinner({ label = "Loading..." }: { size?: "sm" | "md" | "lg"; label?: string; className?: string }) {
   return (
@@ -10,7 +10,7 @@ export function Spinner({ label = "Loading..." }: { size?: "sm" | "md" | "lg"; l
   );
 }
 
-export function ApiLoaderAnimation() {
+export function LoaderAnimation() {
   const colors = ["bg-[#e53735]", "bg-[#1e88e5]", "bg-[#43a047]", "bg-[#fdd835]", "bg-[#fb8c00]"];
   const delays = ["", "[animation-delay:167ms]", "[animation-delay:334ms]", "[animation-delay:501ms]", "[animation-delay:668ms]"];
 
