@@ -828,50 +828,30 @@ function getApiBaseUrl() {
   throw new Error("NEXT_PUBLIC_API_BASE_URL must be configured for deployed environments.");
 }
 
-let activeApiRequests = 0;
-
-export async function withApiLoading<T>(operation: () => Promise<T>): Promise<T> {
-  activeApiRequests += 1;
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent("erm:api-loading", { detail: { count: activeApiRequests } }));
-  }
-
-  try {
-    return await operation();
-  } finally {
-    activeApiRequests = Math.max(0, activeApiRequests - 1);
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("erm:api-loading", { detail: { count: activeApiRequests } }));
-    }
-  }
-}
-
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  return withApiLoading(async () => {
-    const response = await fetch(`${getApiBaseUrl()}${path}`, {
-      ...init,
-      headers: {
-        "Content-Type": "application/json",
-        ...(init?.headers ?? {}),
-      },
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new ApiError(text || "API request failed", response.status);
-    }
-
-    if (response.status === 204) {
-      return undefined as T;
-    }
-
-    const responseBody = await response.text();
-    if (!responseBody.trim()) {
-      return undefined as T;
-    }
-
-    return JSON.parse(responseBody) as T;
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {}),
+    },
   });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new ApiError(text || "API request failed", response.status);
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  const responseBody = await response.text();
+  if (!responseBody.trim()) {
+    return undefined as T;
+  }
+
+  return JSON.parse(responseBody) as T;
 }
 
 export async function login(payload: LoginRequest) {
