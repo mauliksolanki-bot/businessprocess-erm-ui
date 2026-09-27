@@ -17,6 +17,7 @@ import {
   Sparkles,
   TriangleAlert,
   Workflow,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -33,6 +34,7 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [notificationBanners, setNotificationBanners] = useState<NotificationBanner[]>([]);
+  const [dismissedBannerIds, setDismissedBannerIds] = useState<number[]>([]);
   const router = useRouter();
 
   useEffect(() => {
@@ -54,9 +56,21 @@ export default function LoginPage() {
   }, [router]);
 
   function getBannerStyle(type: NotificationBanner["notificationType"]) {
-    if (type === "Urgent") return "border-rose-800 bg-rose-700 shadow-rose-300/40";
-    if (type === "Low Priority") return "border-amber-800 bg-amber-700 shadow-amber-300/40";
-    return "border-emerald-800 bg-emerald-700 shadow-emerald-300/40";
+    if (type === "Urgent") return "border-l-rose-500";
+    if (type === "Low Priority") return "border-l-amber-500";
+    return "border-l-blue-500";
+  }
+
+  function getBannerIconStyle(type: NotificationBanner["notificationType"]) {
+    if (type === "Urgent") return "bg-rose-100 text-rose-700";
+    if (type === "Low Priority") return "bg-amber-100 text-amber-700";
+    return "bg-blue-100 text-blue-700";
+  }
+
+  function getBannerLabelStyle(type: NotificationBanner["notificationType"]) {
+    if (type === "Urgent") return "bg-rose-50 text-rose-800 ring-rose-200";
+    if (type === "Low Priority") return "bg-amber-50 text-amber-800 ring-amber-200";
+    return "bg-blue-50 text-blue-800 ring-blue-200";
   }
 
   function getBannerIcon(type: NotificationBanner["notificationType"]) {
@@ -250,38 +264,42 @@ export default function LoginPage() {
                 </form>
               </div>
 
-              {notificationBanners.length > 0 ? (
-                  <section aria-label="Active notifications" className="mt-4 flex flex-1 flex-col gap-3" aria-live="polite">
-                    {notificationBanners.map((banner) => {
+              {notificationBanners.some((banner) => !dismissedBannerIds.includes(banner.id)) ? (
+                  <section aria-label="Active notifications" className="fixed right-4 top-4 z-50 flex max-h-[calc(100vh-2rem)] w-[calc(100%-2rem)] max-w-md flex-col gap-3 overflow-y-auto p-1 sm:right-6 sm:top-6" aria-live="polite">
+                    {notificationBanners.filter((banner) => !dismissedBannerIds.includes(banner.id)).map((banner) => {
                       const BannerIcon = getBannerIcon(banner.notificationType);
                       return (
                           <article
-                              className={`relative isolate flex min-h-40 flex-1 flex-col justify-center overflow-hidden rounded-[26px] border px-5 py-5 text-white shadow-xl sm:px-6 sm:py-6 2xl:px-7 ${getBannerStyle(banner.notificationType)}`}
+                              className={`relative flex shrink-0 gap-4 rounded-2xl border border-l-4 border-zinc-200 bg-white p-5 text-zinc-900 shadow-[0_18px_55px_-18px_rgba(15,23,42,0.38)] sm:p-6 ${getBannerStyle(banner.notificationType)}`}
                               key={banner.id}
                           >
-                            <div className="pointer-events-none absolute -right-10 -top-14 h-48 w-48 rounded-full border-[26px] border-white/10" />
-                            <div className="pointer-events-none absolute -bottom-20 -left-12 h-40 w-40 rounded-full bg-white/5 blur-2xl" />
-                            <div className="relative flex items-start gap-4">
-                              <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25 shadow-inner sm:h-14 sm:w-14">
-                                <BannerIcon className="h-6 w-6" />
+                            <div className="flex min-w-0 items-start gap-3">
+                              <span className={`mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${getBannerIconStyle(banner.notificationType)}`}>
+                                <BannerIcon aria-hidden="true" className="h-5 w-5" />
                               </span>
                               <div className="flex min-w-0 flex-1 flex-col">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-white/75">ERM · Login notice</span>
-                                  <span className="rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm">
+                                <div className="flex flex-wrap items-center gap-2 pr-7">
+                                  <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">ERM · Login notice</span>
+                                  <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ring-1 ring-inset ${getBannerLabelStyle(banner.notificationType)}`}>
                                     {banner.notificationType === "Urgent" ? "Action required" : banner.notificationType}
                                   </span>
                                 </div>
-                                <h2 className="mt-3 text-lg font-bold leading-snug tracking-tight text-white sm:text-xl">{banner.title}</h2>
-                                <p className="mt-2 whitespace-pre-wrap text-sm font-medium leading-6 text-white sm:text-[15px]">{banner.message}</p>
-                                <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-white/20 pt-3 text-xs font-medium text-white/85">
-                                  <CalendarDays className="h-4 w-4" />
-                                  <span>Visible {new Date(`${banner.startDate}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
-                                  <span className="text-white/60">through</span>
-                                  <span>{new Date(`${banner.endDate}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
+                                <h2 className="mt-2 text-base font-bold leading-snug tracking-tight text-zinc-950 sm:text-lg">{banner.title}</h2>
+                                <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-zinc-700">{banner.message}</p>
+                                <div className="mt-4 flex flex-wrap items-center gap-1.5 border-t border-zinc-100 pt-3 text-xs font-medium text-zinc-500">
+                                  <CalendarDays aria-hidden="true" className="mr-1 h-3.5 w-3.5" />
+                                  <span>Until {new Date(`${banner.endDate}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
                                 </div>
                               </div>
                             </div>
+                            <button
+                                aria-label={`Dismiss notification: ${banner.title}`}
+                                className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                                onClick={() => setDismissedBannerIds((current) => [...current, banner.id])}
+                                type="button"
+                            >
+                              <X aria-hidden="true" className="h-4 w-4" />
+                            </button>
                           </article>
                       );
                     })}
