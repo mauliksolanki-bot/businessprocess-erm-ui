@@ -85,6 +85,7 @@ type ManageProjectForm = {
   deliveryManagerUserId: string;
   projectOwnerUserId: string;
   projectDirectorUserId: string;
+  associatedHrUserId: string;
   projectStatus: ProjectStatus | "";
   description: string;
   riskNotes: string;
@@ -144,6 +145,7 @@ const initialManageProjectForm: ManageProjectForm = {
   deliveryManagerUserId: "",
   projectOwnerUserId: "",
   projectDirectorUserId: "",
+  associatedHrUserId: "",
   projectStatus: "Planned",
   description: "",
   riskNotes: "",
@@ -906,6 +908,7 @@ export default function ProjectsPage() {
     if (!current.deliveryManagerUserId) return "Delivery manager is required.";
     if (!current.projectOwnerUserId) return "Project owner is required.";
     if (!current.projectDirectorUserId) return "Project director is required.";
+    if (!current.associatedHrUserId) return "HRBP is required.";
     if (!current.projectStatus) return "Project status is required.";
     if (current.description.trim().length < 20) return "Description must be at least 20 characters.";
     if (!current.reason.trim()) return "Reason is required.";
@@ -937,6 +940,7 @@ export default function ProjectsPage() {
         deliveryManagerUserId: Number(manageProjectForm.deliveryManagerUserId),
         projectOwnerUserId: Number(manageProjectForm.projectOwnerUserId),
         projectDirectorUserId: Number(manageProjectForm.projectDirectorUserId),
+        associatedHrUserId: Number(manageProjectForm.associatedHrUserId),
         projectStatus: manageProjectForm.projectStatus as ProjectStatus,
         description: manageProjectForm.description.trim(),
         riskNotes: manageProjectForm.riskNotes.trim() || undefined,
@@ -1139,6 +1143,7 @@ export default function ProjectsPage() {
       deliveryManagerUserId: String(project.deliveryManagerUserId),
       projectOwnerUserId: String(project.projectOwnerUserId),
       projectDirectorUserId: project.projectDirectorUserId ? String(project.projectDirectorUserId) : "",
+      associatedHrUserId: String(project.associatedHrUserId),
       projectStatus: project.projectStatus,
       description: project.description,
       riskNotes: project.riskNotes ?? "",
@@ -1152,6 +1157,9 @@ export default function ProjectsPage() {
     }
     if (projectDirectors.length === 0) {
       await loadProjectDirectors();
+    }
+    if (projectHrOptions.length === 0) {
+      await loadProjectHrOptions();
     }
   }
 
@@ -1202,6 +1210,15 @@ export default function ProjectsPage() {
         { label: "Delivery Manager", current: currentProjectForChangeRequest?.deliveryManagerName, requested: viewChangeRequest.deliveryManagerName },
         { label: "Project Owner", current: currentProjectForChangeRequest?.projectOwnerName, requested: viewChangeRequest.projectOwnerName },
         { label: "Project Director", current: currentProjectForChangeRequest?.projectDirectorName, requested: viewChangeRequest.projectDirectorName },
+        {
+          label: "HRBP",
+          current: currentProjectForChangeRequest ? `${currentProjectForChangeRequest.associatedHrName} (${currentProjectForChangeRequest.associatedHrRoleName})` : undefined,
+          requested: viewChangeRequest.associatedHrName
+            ? `${viewChangeRequest.associatedHrName}${viewChangeRequest.associatedHrRoleName ? ` (${viewChangeRequest.associatedHrRoleName})` : ""}`
+            : currentProjectForChangeRequest
+              ? `${currentProjectForChangeRequest.associatedHrName} (${currentProjectForChangeRequest.associatedHrRoleName})`
+              : undefined,
+        },
         { label: "Description", current: currentProjectForChangeRequest?.description, requested: viewChangeRequest.description },
         { label: "Risk Notes", current: currentProjectForChangeRequest?.riskNotes, requested: viewChangeRequest.riskNotes },
       ].map((item) => {
@@ -2697,6 +2714,21 @@ export default function ProjectsPage() {
                           </option>
                       ))}
                     </Select>
+                    <Select
+                        label="HRBP *"
+                        value={manageProjectForm.associatedHrUserId}
+                        onChange={(v) => setManageProjectForm((s) => ({ ...s, associatedHrUserId: v }))}
+                        onFocus={() => {
+                          if (projectHrOptions.length === 0) void loadProjectHrOptions();
+                        }}
+                    >
+                      <option value="">Select HRBP</option>
+                      {projectHrOptions.map((hr) => (
+                          <option key={hr.id} value={String(hr.id)}>
+                            {hr.fullName} ({hr.roleName})
+                          </option>
+                      ))}
+                    </Select>
                     <Textarea className="md:col-span-2" label="Project Description *" value={manageProjectForm.description} onChange={(v) => setManageProjectForm((s) => ({ ...s, description: v }))} />
                     <Textarea className="md:col-span-2" label="Risk Notes" value={manageProjectForm.riskNotes} onChange={(v) => setManageProjectForm((s) => ({ ...s, riskNotes: v }))} />
                     <Textarea className="md:col-span-2" label="Reason for change *" value={manageProjectForm.reason} onChange={(v) => setManageProjectForm((s) => ({ ...s, reason: v }))} />
@@ -2824,6 +2856,14 @@ export default function ProjectsPage() {
                     <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-3 text-sm text-zinc-700">
                       <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Project Director</p>
                       <p className="mt-1 font-medium text-zinc-900">{viewChangeRequest.projectDirectorName || "-"}</p>
+                    </div>
+                    <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-3 text-sm text-zinc-700">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">HRBP</p>
+                      <p className="mt-1 font-medium text-zinc-900">
+                        {viewChangeRequest.associatedHrName
+                          ? `${viewChangeRequest.associatedHrName}${viewChangeRequest.associatedHrRoleName ? ` (${viewChangeRequest.associatedHrRoleName})` : ""}`
+                          : "-"}
+                      </p>
                     </div>
                     <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-3 text-sm text-zinc-700">
                       <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Planned Start Date</p>
