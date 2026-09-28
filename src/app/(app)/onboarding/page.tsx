@@ -1090,7 +1090,7 @@ export default function OnboardingPage() {
                 </>
               </CardContent>
             </Card>
-        ) : (
+        ) : activeTab === "tracker" ? (
             <Card className="mb-6 overflow-hidden shadow-md shadow-zinc-100/80">
               <CardContent className="pt-6">
                 {!hasLoaded || isLoading ? (
@@ -1282,7 +1282,7 @@ export default function OnboardingPage() {
                 )}
               </CardContent>
             </Card>
-        )}
+        ) : null}
 
         {activeTab === "bulk" && isSeniorHr ? (
             <Card className="mb-6 overflow-hidden border-emerald-100 shadow-md shadow-emerald-100/40">
