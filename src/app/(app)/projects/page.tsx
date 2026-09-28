@@ -6,6 +6,7 @@ import { Bell, Check, CheckCircle2, ChevronDown, CornerUpLeft, Eye, KanbanSquare
 import { toast } from "sonner";
 
 import { CommentsConversationModal } from "@/components/erm/comments-conversation-modal";
+import { BulkProjectRequests } from "@/components/erm/bulk-project-requests";
 import { DataTablePagination } from "@/components/erm/data-table-pagination";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -109,7 +110,7 @@ type AllocationManageForm = {
   comment: string;
 };
 
-type ProjectTopTab = "raiseProject" | "projectTracker" | "projectAllocation" | "allocationTracker" | "manageProjects" | "changeTracker" | "projectMaster";
+type ProjectTopTab = "raiseProject" | "bulkProject" | "projectTracker" | "projectAllocation" | "allocationTracker" | "manageProjects" | "changeTracker" | "projectMaster";
 
 const initialForm: ProjectForm = {
   projectName: "",
@@ -215,7 +216,7 @@ export default function ProjectsPage() {
   const initialProjectTabActivated = useRef(false);
   const [activeTab, setActiveTab] = useState<"requests" | "allocation" | "management" | "changeTracker" | "master">("requests");
   const [projectTopTab, setProjectTopTab] = useState<ProjectTopTab>("raiseProject");
-  const [requestTab, setRequestTab] = useState<"raise" | "tracker">("raise");
+  const [requestTab, setRequestTab] = useState<"raise" | "tracker" | "bulk">("raise");
   const [allocationTab, setAllocationTab] = useState<"raise" | "tracker">("tracker");
   const [form, setForm] = useState<ProjectForm>(initialForm);
   const [requests, setRequests] = useState<ProjectRequest[]>([]);
@@ -317,6 +318,7 @@ export default function ProjectsPage() {
       () =>
           [
             canCreate ? "raiseProject" : null,
+            canCreate ? "bulkProject" : null,
             canCreate || canViewProjectTrackers ? "projectTracker" : null,
             canCreate ? "manageProjects" : null,
             canUseManageProjects ? "changeTracker" : null,
@@ -569,6 +571,12 @@ export default function ProjectsPage() {
           if (projectOwners.length === 0) void loadProjectOwners();
           if (projectDirectors.length === 0) void loadProjectDirectors();
           if (projectManagers.length === 0) void loadProjectManagers();
+          return;
+        }
+        if (tab === "bulkProject") {
+          setProjectTopTab("bulkProject");
+          setActiveTab("requests");
+          setRequestTab("bulk");
           return;
         }
         if (tab === "projectTracker") {
@@ -1252,6 +1260,15 @@ export default function ProjectsPage() {
                 Request New Project
               </Button>
           ) : null}
+          {canCreate ? (
+              <Button
+                  className={activeProjectTopTab === "bulkProject" ? "bg-gradient-to-r from-indigo-600 to-fuchsia-600 text-white hover:from-indigo-500 hover:to-fuchsia-500" : ""}
+                  onClick={() => activateProjectTab("bulkProject")}
+                  variant={activeProjectTopTab === "bulkProject" ? "default" : "ghost"}
+              >
+                Bulk Project Requests
+              </Button>
+          ) : null}
           {canCreate || canViewProjectTrackers ? (
               <Button
                   className={activeProjectTopTab === "projectTracker" ? "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:from-violet-500 hover:to-fuchsia-500" : ""}
@@ -1307,6 +1324,13 @@ export default function ProjectsPage() {
               </Button>
           ) : null}
         </div>
+
+        {activeTab === "requests" && requestTab === "bulk" && canCreate ? (
+            <BulkProjectRequests
+                accessToken={accessToken}
+                onSubmitted={() => { void loadRequests(0, pageSize, query, workflowFilter); }}
+            />
+        ) : null}
 
         {activeTab === "requests" && requestTab === "raise" && canCreate && (
             <Card className="border-blue-100 shadow-md shadow-blue-100/40">
