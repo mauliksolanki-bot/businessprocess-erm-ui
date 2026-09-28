@@ -39,6 +39,8 @@ import {
 import { loadSession } from "@/lib/auth-storage";
 
 const ADDITIONAL_APPROVER_DESIGNATIONS: OnboardingAdditionalApproverDesignation[] = ["Super Admin", "CHRO", "CEO", "CTO"];
+const MAX_BULK_ONBOARDING_ROWS = 10000;
+const BULK_ONBOARDING_BATCH_SIZE = 100;
 
 function additionalApproverRoleName(designation: OnboardingAdditionalApproverDesignation) {
   return designation.toLowerCase();
@@ -91,6 +93,16 @@ const bulkOnboardingColumns = [
   { key: "comment", header: "HR Comment", width: 36 },
 ] as const;
 
+type BulkSaveProgress = {
+  totalRows: number;
+  processedRows: number;
+  currentBatch: number;
+  totalBatches: number;
+  createdRequestIds: number[];
+  status: "saving" | "paused" | "complete";
+  message?: string;
+};
+
 function readExcelCell(value: unknown): string {
   if (value === null || value === undefined) return "";
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value).trim();
@@ -102,6 +114,33 @@ function readExcelCell(value: unknown): string {
     if (cell.result !== undefined && cell.result !== null) return String(cell.result).trim();
   }
   return "";
+}
+
+function findCrossBatchDuplicateErrors(rows: OnboardingBulkRow[], batchSize: number) {
+  const fields = [
+    { field: "Aadhaar Card Number", value: (row: OnboardingBulkRow) => row.aadhaarCardNumber },
+    { field: "PAN", value: (row: OnboardingBulkRow) => row.panCardNumber },
+    { field: "Personal Email Address", value: (row: OnboardingBulkRow) => row.personalEmailAddress },
+  ];
+  const errors: OnboardingBulkValidationResponse["errors"] = [];
+  for (const { field, value } of fields) {
+    const firstRowByValue = new Map<string, { rowNumber: number; batchIndex: number }>();
+    rows.forEach((row, index) => {
+      const normalized = value(row).trim().toLowerCase();
+      if (!normalized) return;
+      const batchIndex = Math.floor(index / batchSize);
+      const previous = firstRowByValue.get(normalized);
+      if (previous && previous.batchIndex !== batchIndex) {
+        errors.push({
+          rowNumber: row.rowNumber,
+          field,
+          message: "Duplicates the value in row " + previous.rowNumber + " of this file.",
+        });
+      }
+      firstRowByValue.set(normalized, { rowNumber: row.rowNumber, batchIndex });
+    });
+  }
+  return errors;
 }
 
 function stageClass(stage: string) {
@@ -229,7 +268,9 @@ export default function OnboardingPage() {
   const [isReadingBulkFile, setIsReadingBulkFile] = useState(false);
   const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
   const [isValidatingBulk, setIsValidatingBulk] = useState(false);
+  const [bulkValidationProgress, setBulkValidationProgress] = useState<{ completedRows: number; totalRows: number } | null>(null);
   const [isSubmittingBulk, setIsSubmittingBulk] = useState(false);
+  const [bulkSaveProgress, setBulkSaveProgress] = useState<BulkSaveProgress | null>(null);
 
   const session = useMemo(() => {
     return loadSession();
@@ -810,7 +851,7 @@ export default function OnboardingPage() {
         key: column.key,
         width: column.width,
       }));
-      worksheet.autoFilter = { from: "A1", to: "L501" };
+      worksheet.autoFilter = { from: "A1", to: "L" + (MAX_BULK_ONBOARDING_ROWS + 1) };
       worksheet.getRow(1).height = 32;
       worksheet.getRow(1).eachCell((cell) => {
         cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
@@ -882,13 +923,13 @@ export default function OnboardingPage() {
         ["Columns marked * are required. Aadhaar, PAN, phone, and email values must be entered as text and must be valid."],
         ["Choose Designation first. The Reporting Manager Username and HRBP Username dropdowns then show only options valid for that designation. These values are refreshed from the database each time this template is downloaded."],
         ["The reporting manager and HRBP must match the selected designation's current hierarchy and HRBP mapping. The Validate step checks this before submission."],
-        ["You can submit up to 500 rows in one workbook. Each valid row creates a separate onboarding request."],
+        ["You can submit up to " + MAX_BULK_ONBOARDING_ROWS.toLocaleString("en-IN") + " rows in one workbook. Each valid row creates a separate onboarding request; large submissions are saved in batches."],
       ]);
       instructions.getRow(1).font = { bold: true, size: 16, color: { argb: "FF243B73" } };
       instructions.getColumn(1).alignment = { wrapText: true, vertical: "middle" };
       instructions.eachRow((row) => { row.height = 32; });
 
-      for (let rowNumber = 2; rowNumber <= 501; rowNumber++) {
+      for (let rowNumber = 2; rowNumber <= MAX_BULK_ONBOARDING_ROWS + 1; rowNumber++) {
         for (const columnNumber of [8, 9, 10]) {
           const rangeFormula = columnNumber === 8
               ? "=DesignationOptions"
@@ -940,6 +981,8 @@ export default function OnboardingPage() {
     setBulkRows(null);
     setBulkValidation(null);
     setBulkSubmission(null);
+    setBulkValidationProgress(null);
+    setBulkSaveProgress(null);
     if (!file) return;
     if (!file.name.toLowerCase().endsWith(".xlsx")) {
       toast.error("Upload the downloaded .xlsx onboarding template.");
@@ -966,7 +1009,9 @@ export default function OnboardingPage() {
         throw new Error("The spreadsheet columns do not match the downloaded onboarding template.");
       }
 
-      if (worksheet.rowCount > 501) throw new Error("A maximum of 500 candidate rows can be uploaded at once.");
+      if (worksheet.rowCount > MAX_BULK_ONBOARDING_ROWS + 1) {
+        throw new Error("A maximum of " + MAX_BULK_ONBOARDING_ROWS.toLocaleString("en-IN") + " candidate rows can be uploaded at once.");
+      }
       const rows: OnboardingBulkRow[] = [];
       for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber++) {
         const values = bulkOnboardingColumns.map((_, index) => readExcelCell(worksheet.getCell(rowNumber, index + 1).value));
@@ -1002,17 +1047,30 @@ export default function OnboardingPage() {
     const token = accessToken();
     if (!token || !bulkRows) return;
     setIsValidatingBulk(true);
+    setBulkValidationProgress({ completedRows: 0, totalRows: bulkRows.length });
     setBulkValidation(null);
     setBulkSubmission(null);
     try {
-      const result = await validateBulkOnboardingRequests(token, bulkRows);
+      const errors: OnboardingBulkValidationResponse["errors"] = [];
+      for (let start = 0; start < bulkRows.length; start += BULK_ONBOARDING_BATCH_SIZE) {
+        const batch = bulkRows.slice(start, start + BULK_ONBOARDING_BATCH_SIZE);
+        const result = await validateBulkOnboardingRequests(token, batch);
+        errors.push(...result.errors);
+        setBulkValidationProgress({
+          completedRows: Math.min(start + batch.length, bulkRows.length),
+          totalRows: bulkRows.length,
+        });
+      }
+      errors.push(...findCrossBatchDuplicateErrors(bulkRows, BULK_ONBOARDING_BATCH_SIZE));
+      const result: OnboardingBulkValidationResponse = { valid: errors.length === 0, errors };
       setBulkValidation(result);
       if (result.valid) toast.success("Validation has been passed!");
-      else toast.error(`Validation has been failed. ${result.errors.length} issue${result.errors.length === 1 ? "" : "s"} found.`);
+      else toast.error("Validation has been failed. " + result.errors.length + " issue(s) found.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to validate the onboarding workbook.");
     } finally {
       setIsValidatingBulk(false);
+      setBulkValidationProgress(null);
     }
   }
 
@@ -1020,19 +1078,65 @@ export default function OnboardingPage() {
     const token = accessToken();
     if (!token || !bulkRows || !bulkValidation?.valid || bulkSubmission?.submitted) return;
     setIsSubmittingBulk(true);
+    const totalBatches = Math.ceil(bulkRows.length / BULK_ONBOARDING_BATCH_SIZE);
+    let progress: BulkSaveProgress = bulkSaveProgress ?? {
+      totalRows: bulkRows.length,
+      processedRows: 0,
+      currentBatch: 1,
+      totalBatches,
+      createdRequestIds: [],
+      status: "saving",
+    };
+    progress = { ...progress, status: "saving", message: undefined };
+    setBulkSaveProgress(progress);
     try {
-      const result = await submitBulkOnboardingRequests(token, bulkRows);
-      setBulkSubmission(result);
-      if (result.submitted) {
-        toast.success(`${result.createdRequestIds.length} onboarding request${result.createdRequestIds.length === 1 ? "" : "s"} created.`);
-        setBulkValidation({ valid: true, errors: [] });
-        await loadRequests(0, pageSize);
-      } else {
-        setBulkValidation({ valid: false, errors: result.errors });
-        toast.error("Validation has been failed. Review the row errors before submitting again.");
+      for (let start = progress.processedRows; start < bulkRows.length; start += BULK_ONBOARDING_BATCH_SIZE) {
+        const batch = bulkRows.slice(start, start + BULK_ONBOARDING_BATCH_SIZE);
+        progress = {
+          ...progress,
+          currentBatch: Math.floor(start / BULK_ONBOARDING_BATCH_SIZE) + 1,
+          status: "saving",
+          message: undefined,
+        };
+        setBulkSaveProgress(progress);
+
+        const result = await submitBulkOnboardingRequests(token, batch);
+        if (!result.submitted) {
+          setBulkValidation({ valid: false, errors: result.errors });
+          progress = {
+            ...progress,
+            status: "paused",
+            message: "This batch could not be saved. Fix the row errors, validate again, then resume saving.",
+          };
+          setBulkSaveProgress(progress);
+          toast.error("A batch was not saved. Review the row errors before continuing.");
+          return;
+        }
+
+        progress = {
+          ...progress,
+          processedRows: Math.min(start + batch.length, bulkRows.length),
+          createdRequestIds: [...progress.createdRequestIds, ...result.createdRequestIds],
+          status: "saving",
+          message: undefined,
+        };
+        setBulkSaveProgress(progress);
       }
+      progress = { ...progress, status: "complete", processedRows: bulkRows.length };
+      setBulkSaveProgress(progress);
+      setBulkSubmission({ submitted: true, errors: [], createdRequestIds: progress.createdRequestIds });
+      toast.success(progress.createdRequestIds.length + " onboarding request" + (progress.createdRequestIds.length === 1 ? "" : "s") + " created.");
+      setBulkValidation({ valid: true, errors: [] });
+      await loadRequests(0, pageSize);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to submit onboarding requests.");
+      const message = error instanceof Error ? error.message : "Unable to submit onboarding requests.";
+      progress = {
+        ...progress,
+        status: "paused",
+        message: "Saving paused after " + progress.processedRows.toLocaleString("en-IN") + " of " + progress.totalRows.toLocaleString("en-IN") + " rows. " + message,
+      };
+      setBulkSaveProgress(progress);
+      toast.error("Saving paused. " + progress.processedRows.toLocaleString("en-IN") + " of " + progress.totalRows.toLocaleString("en-IN") + " requests were confirmed saved.");
     } finally {
       setIsSubmittingBulk(false);
     }
@@ -1485,7 +1589,7 @@ export default function OnboardingPage() {
                   <FileSpreadsheet className="h-5 w-5" /> Bulk On-Boarding Requests
                 </CardTitle>
                 <CardDescription className="text-emerald-50">
-                  Download a fresh template, complete one candidate per row, then validate before submitting. Each row creates a separate request.
+                  Download a fresh template, complete one candidate per row, then validate before submitting. Workbooks support up to 10,000 rows and are saved in small batches.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6 pt-6">
@@ -1503,7 +1607,7 @@ export default function OnboardingPage() {
                   <label className={`inline-flex h-10 cursor-pointer items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-100 ${isReadingBulkFile ? "pointer-events-none opacity-60" : ""}`}>
                     {isReadingBulkFile ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
                     {isReadingBulkFile ? "Reading workbook..." : "Upload completed workbook"}
-                    <input accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="sr-only" disabled={isReadingBulkFile} onChange={(event) => void handleBulkFileChange(event)} type="file" />
+                    <input accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="sr-only" disabled={isReadingBulkFile || isValidatingBulk || isSubmittingBulk} onChange={(event) => void handleBulkFileChange(event)} type="file" />
                   </label>
                   {bulkFileName ? (
                       <p className="text-xs text-zinc-500 lg:col-span-3">Selected file: <span className="font-medium text-zinc-700">{bulkFileName}</span>{bulkRows ? ` · ${bulkRows.length} candidate row${bulkRows.length === 1 ? "" : "s"}` : ""}</p>
@@ -1522,10 +1626,47 @@ export default function OnboardingPage() {
                     </Button>
                     <Button disabled={!bulkValidation?.valid || isValidatingBulk || isSubmittingBulk || !!bulkSubmission?.submitted} onClick={() => void submitBulkFile()}>
                       {isSubmittingBulk ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                      {isSubmittingBulk ? "Submitting..." : "Submit all requests"}
+                      {isSubmittingBulk
+                          ? "Saving " + (bulkSaveProgress?.processedRows ?? 0).toLocaleString("en-IN") + "/" + (bulkSaveProgress?.totalRows ?? bulkRows?.length ?? 0).toLocaleString("en-IN")
+                          : bulkSaveProgress?.status === "paused"
+                              ? bulkSaveProgress.processedRows > 0 ? "Resume saving remaining" : "Retry saving"
+                              : "Submit all requests"}
                     </Button>
                   </div>
                 </div>
+
+                {isValidatingBulk && bulkValidationProgress ? (
+                    <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-4" role="status" aria-live="polite">
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <span className="font-medium text-blue-950">Validating workbook in batches</span>
+                        <span className="tabular-nums text-blue-800">{bulkValidationProgress.completedRows.toLocaleString("en-IN")} / {bulkValidationProgress.totalRows.toLocaleString("en-IN")} rows</span>
+                      </div>
+                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-blue-100">
+                        <div className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 transition-[width]" style={{ width: (bulkValidationProgress.completedRows / Math.max(1, bulkValidationProgress.totalRows) * 100) + "%" }} />
+                      </div>
+                    </div>
+                ) : null}
+
+                {bulkSaveProgress ? (
+                    <div className={"rounded-xl border p-4 " + (bulkSaveProgress.status === "complete" ? "border-emerald-200 bg-emerald-50" : bulkSaveProgress.status === "paused" ? "border-amber-200 bg-amber-50" : "border-indigo-200 bg-indigo-50")} role="status" aria-live="polite">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                        <span className="font-semibold text-zinc-900">
+                          {bulkSaveProgress.status === "complete" ? "All onboarding requests saved" : bulkSaveProgress.status === "paused" ? "Batch saving paused" : "Saving onboarding requests"}
+                        </span>
+                        <span className="font-medium tabular-nums text-zinc-700">
+                          {bulkSaveProgress.processedRows.toLocaleString("en-IN")} / {bulkSaveProgress.totalRows.toLocaleString("en-IN")} records saved
+                        </span>
+                      </div>
+                      <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-white/80 ring-1 ring-black/5">
+                        <div className={"h-full rounded-full transition-[width] " + (bulkSaveProgress.status === "paused" ? "bg-amber-500" : "bg-gradient-to-r from-indigo-600 via-violet-600 to-emerald-500")} style={{ width: (bulkSaveProgress.processedRows / Math.max(1, bulkSaveProgress.totalRows) * 100) + "%" }} />
+                      </div>
+                      <div className="mt-2 flex flex-wrap justify-between gap-2 text-xs text-zinc-600">
+                        <span>{bulkSaveProgress.createdRequestIds.length.toLocaleString("en-IN")} request(s) confirmed saved</span>
+                        {bulkSaveProgress.status !== "complete" ? <span>Batch {Math.min(bulkSaveProgress.currentBatch, bulkSaveProgress.totalBatches)} of {bulkSaveProgress.totalBatches} · {BULK_ONBOARDING_BATCH_SIZE} records per batch</span> : null}
+                      </div>
+                      {bulkSaveProgress.message ? <p className="mt-2 text-sm text-amber-900">{bulkSaveProgress.message}</p> : null}
+                    </div>
+                ) : null}
 
                 {bulkValidation ? (
                     <div className={`rounded-2xl border p-4 ${bulkValidation.valid ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50"}`}>
