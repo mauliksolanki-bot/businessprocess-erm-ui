@@ -397,6 +397,32 @@ export type ProjectRequest = {
   version: number;
 };
 
+export type ProjectRequestCreatePayload = {
+  projectName: string;
+  projectCode: string;
+  clientName: string;
+  projectType: string;
+  priority: string;
+  plannedStartDate: string;
+  plannedEndDate: string;
+  budgetAmount: number;
+  currency: string;
+  deliveryManagerUserId: number;
+  projectOwnerUserId: number;
+  projectDirectorUserId: number;
+  projectManagerUserId: number;
+  associatedHrUserId: number;
+  projectStatus: ProjectStatus;
+  description: string;
+  riskNotes?: string;
+  comment?: string;
+};
+
+export type ProjectBulkRow = { rowNumber: number; project: ProjectRequestCreatePayload };
+export type ProjectBulkValidationError = { rowNumber: number | null; field: string; message: string };
+export type ProjectBulkValidationResponse = { valid: boolean; errors: ProjectBulkValidationError[] };
+export type ProjectBulkSubmitResponse = { submitted: boolean; errors: ProjectBulkValidationError[]; createdRequestIds: number[] };
+
 export type ManagedProject = {
   id: number;
   projectName: string;
@@ -1410,26 +1436,7 @@ export async function getProjectHrOptions(accessToken: string) {
 
 export async function createProjectRequest(
     accessToken: string,
-    payload: {
-      projectName: string;
-      projectCode: string;
-      clientName: string;
-      projectType: string;
-      priority: string;
-      plannedStartDate: string;
-      plannedEndDate: string;
-      budgetAmount: number;
-      currency: string;
-      deliveryManagerUserId: number;
-      projectOwnerUserId: number;
-      projectDirectorUserId: number;
-      projectManagerUserId: number;
-      associatedHrUserId: number;
-      projectStatus: ProjectStatus;
-      description: string;
-      riskNotes?: string;
-      comment?: string;
-    }
+    payload: ProjectRequestCreatePayload
 ) {
   return request<ProjectRequest>("/api/project-requests", {
     method: "POST",
@@ -1437,6 +1444,22 @@ export async function createProjectRequest(
       Authorization: "Bearer " + accessToken,
     },
     body: JSON.stringify(payload),
+  });
+}
+
+export async function validateBulkProjectRequests(accessToken: string, rows: ProjectBulkRow[]) {
+  return request<ProjectBulkValidationResponse>("/api/project-requests/bulk/validate", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + accessToken },
+    body: JSON.stringify({ rows }),
+  });
+}
+
+export async function submitBulkProjectRequests(accessToken: string, rows: ProjectBulkRow[]) {
+  return request<ProjectBulkSubmitResponse>("/api/project-requests/bulk", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + accessToken },
+    body: JSON.stringify({ rows }),
   });
 }
 
