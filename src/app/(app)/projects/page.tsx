@@ -212,6 +212,7 @@ function formatBudget(currency: string, amount: number) {
 }
 
 export default function ProjectsPage() {
+  const initialProjectTabActivated = useRef(false);
   const [activeTab, setActiveTab] = useState<"requests" | "allocation" | "management" | "changeTracker" | "master">("requests");
   const [projectTopTab, setProjectTopTab] = useState<ProjectTopTab>("raiseProject");
   const [requestTab, setRequestTab] = useState<"raise" | "tracker">("raise");
@@ -637,6 +638,12 @@ export default function ProjectsPage() {
         projectOwners.length,
       ]
   );
+
+  useEffect(() => {
+    if (initialProjectTabActivated.current) return;
+    initialProjectTabActivated.current = true;
+    activateProjectTab(activeProjectTopTab);
+  }, [activeProjectTopTab, activateProjectTab]);
 
   function validateForm(current: ProjectForm) {
     if (current.projectName.trim().length < 3) return "Project name must be at least 3 characters.";

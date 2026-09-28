@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bell, CheckCircle2, CornerUpLeft, Eye, Loader2, MessageSquareQuote, PencilLine, RefreshCcw, Send, ShieldX } from "lucide-react";
 import { toast } from "sonner";
 
@@ -150,6 +150,7 @@ function validateRequestForm(form: RequestForm) {
 }
 
 export default function OnboardingPage() {
+  const initialTabLoadStarted = useRef(false);
   const [activeTab, setActiveTab] = useState<"raise" | "tracker">(() => {
     const roleNames = (loadSession()?.roles ?? []).map((role) => role.toLowerCase());
     return roleNames.includes("senior hr") || roleNames.includes("hr") ? "raise" : "tracker";
@@ -342,6 +343,16 @@ export default function OnboardingPage() {
       setLoadingJuniorHrOptions(false);
     }
   }, [accessToken]);
+
+  useEffect(() => {
+    if (initialTabLoadStarted.current) return;
+    initialTabLoadStarted.current = true;
+    if (activeTab === "tracker") {
+      void loadRequests();
+    } else if (canCreate) {
+      void loadDesignationOptions();
+    }
+  }, [activeTab, canCreate, loadDesignationOptions, loadRequests]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
