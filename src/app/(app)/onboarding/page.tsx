@@ -1,20 +1,21 @@
 "use client";
 
-import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bell, CheckCircle2, CornerUpLeft, Eye, Loader2, MessageSquareQuote, PencilLine, RefreshCcw, Send, ShieldX } from "lucide-react";
+import { type ChangeEvent, type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Bell, CheckCircle2, CornerUpLeft, Download, Eye, FileSpreadsheet, Loader2, MessageSquareQuote, PencilLine, RefreshCcw, Send, ShieldX, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { CommentsConversationModal } from "@/components/erm/comments-conversation-modal";
 import { DataTablePagination } from "@/components/erm/data-table-pagination";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MentionTextareaField } from "@/components/ui/mention-textarea-field";
 import {
   ApiError,
   addOnboardingRequestComment,
   createOnboardingRequest,
   getOnboardingDesignationOptions,
+  getOnboardingBulkTemplateOptions,
   getJuniorHrOptions,
   getOnboardingManagerOptions,
   getOnboardingRequests,
@@ -22,9 +23,14 @@ import {
   resubmitOnboardingRequest,
   sendOnboardingReminder,
   searchUserMentions,
+  submitBulkOnboardingRequests,
   takeOnboardingAction,
+  validateBulkOnboardingRequests,
   ONBOARDING_CLOSED_STAGES,
   type OnboardingAdditionalApproverDesignation,
+  type OnboardingBulkRow,
+  type OnboardingBulkSubmitResponse,
+  type OnboardingBulkValidationResponse,
   type OnboardingDesignationOption,
   type OnboardingManagerOption,
   type OnboardingRequest,
@@ -68,6 +74,34 @@ const initialForm: RequestForm = {
   educationQualification: "",
   comment: "",
 };
+
+const bulkOnboardingColumns = [
+  { key: "firstName", header: "First Name *", width: 20 },
+  { key: "lastName", header: "Last Name *", width: 20 },
+  { key: "aadhaarCardNumber", header: "Aadhaar Card Number *", width: 24 },
+  { key: "panCardNumber", header: "PAN *", width: 18 },
+  { key: "personalEmailAddress", header: "Personal Email Address *", width: 30 },
+  { key: "permanentAddress", header: "Permanent Address *", width: 38 },
+  { key: "phoneNumber", header: "Phone Number *", width: 20 },
+  { key: "designationRoleName", header: "Designation *", width: 30 },
+  { key: "reportingManagerUsername", header: "Reporting Manager Username *", width: 32 },
+  { key: "hrbpUsername", header: "HRBP Username *", width: 24 },
+  { key: "educationQualification", header: "Education Qualification", width: 28 },
+  { key: "comment", header: "HR Comment", width: 36 },
+] as const;
+
+function readExcelCell(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value).trim();
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (typeof value === "object") {
+    const cell = value as { text?: unknown; richText?: Array<{ text?: unknown }>; result?: unknown };
+    if (typeof cell.text === "string") return cell.text.trim();
+    if (Array.isArray(cell.richText)) return cell.richText.map((part) => String(part.text ?? "")).join("").trim();
+    if (cell.result !== undefined && cell.result !== null) return String(cell.result).trim();
+  }
+  return "";
+}
 
 function stageClass(stage: string) {
   const value = stage.toLowerCase();
@@ -151,7 +185,7 @@ function validateRequestForm(form: RequestForm) {
 
 export default function OnboardingPage() {
   const initialTabLoadStarted = useRef(false);
-  const [activeTab, setActiveTab] = useState<"raise" | "tracker">(() => {
+  const [activeTab, setActiveTab] = useState<"raise" | "tracker" | "bulk">(() => {
     const roleNames = (loadSession()?.roles ?? []).map((role) => role.toLowerCase());
     return roleNames.includes("senior hr") || roleNames.includes("hr") ? "raise" : "tracker";
   });
@@ -182,6 +216,14 @@ export default function OnboardingPage() {
   const [requiredManagerRole, setRequiredManagerRole] = useState("");
   const [loadingManagers, setLoadingManagers] = useState(false);
   const [trackerStatusFilter, setTrackerStatusFilter] = useState<TrackerStatusFilter>("all");
+  const [bulkFileName, setBulkFileName] = useState("");
+  const [bulkRows, setBulkRows] = useState<OnboardingBulkRow[] | null>(null);
+  const [bulkValidation, setBulkValidation] = useState<OnboardingBulkValidationResponse | null>(null);
+  const [bulkSubmission, setBulkSubmission] = useState<OnboardingBulkSubmitResponse | null>(null);
+  const [isReadingBulkFile, setIsReadingBulkFile] = useState(false);
+  const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
+  const [isValidatingBulk, setIsValidatingBulk] = useState(false);
+  const [isSubmittingBulk, setIsSubmittingBulk] = useState(false);
 
   const session = useMemo(() => {
     return loadSession();
@@ -198,6 +240,7 @@ export default function OnboardingPage() {
   const roleNames = userRoles.map((role) => role.toLowerCase());
   const hasRole = (roleName: string) => roleNames.includes(roleName);
   const canCreate = hasRole("senior hr") || hasRole("hr");
+  const isSeniorHr = hasRole("senior hr");
   const isJuniorHr = hasRole("junior hr") && !canCreate;
   const canHeadHrApprove = hasRole("hr head");
   const canAdminApprove = hasRole("admin");
@@ -229,13 +272,17 @@ export default function OnboardingPage() {
     return requests.filter((request) => ["Rejected", "Cancelled"].includes(request.workflowStage));
   }, [requests, trackerStatusFilter]);
 
-  const headerTitle = activeTab === "raise" ? (editingRequestId ? "Update request" : "Create On-Boarding Request") : "Track On-Boarding Request";
+  const headerTitle = activeTab === "raise"
+      ? (editingRequestId ? "Update request" : "Create On-Boarding Request")
+      : activeTab === "tracker" ? "Track On-Boarding Request" : "Bulk On-Boarding Requests";
   const headerDescription =
       activeTab === "raise"
           ? editingRequestId
               ? "Update the details and resubmit this on-boarding request."
               : "Fill candidate details to create a new on-boarding request."
-          : "Track request status, take actions, and review request details.";
+          : activeTab === "tracker"
+              ? "Track request status, take actions, and review request details."
+              : "Download the current template, validate the completed workbook, and submit one request per row.";
 
   useEffect(() => {
     if (!canCreate && activeTab === "raise") {
@@ -637,6 +684,210 @@ export default function OnboardingPage() {
     }
   }
 
+  async function downloadBulkTemplate() {
+    const token = accessToken();
+    if (!token) return;
+    setIsDownloadingTemplate(true);
+    try {
+      const templateOptions = await getOnboardingBulkTemplateOptions(token);
+      const { Workbook } = await import("exceljs");
+      const workbook = new Workbook();
+      workbook.creator = "ERM";
+      workbook.created = new Date();
+
+      const worksheet = workbook.addWorksheet("Onboarding Requests", {
+        views: [{ state: "frozen", ySplit: 1 }],
+      });
+      worksheet.columns = bulkOnboardingColumns.map((column) => ({
+        header: column.header,
+        key: column.key,
+        width: column.width,
+      }));
+      worksheet.autoFilter = { from: "A1", to: "L501" };
+      worksheet.getRow(1).height = 32;
+      worksheet.getRow(1).eachCell((cell) => {
+        cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF243B73" } };
+        cell.alignment = { vertical: "middle", wrapText: true };
+      });
+
+      const optionsSheet = workbook.addWorksheet("Options");
+      optionsSheet.state = "veryHidden";
+      const uniqueSorted = (values: string[]) => [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
+      const optionLists = [
+        ["DesignationOptions", "Designation", uniqueSorted(templateOptions.designations.map((option) => option.designationRoleName))],
+        ["ReportingManagerOptions", "Reporting Managers", uniqueSorted(templateOptions.designations.flatMap((option) => option.reportingManagerUsernames))],
+        ["HrbpOptions", "HRBP Contacts", uniqueSorted(templateOptions.designations.flatMap((option) => option.hrbpUsernames))],
+      ] as const;
+      optionLists.forEach(([rangeName, heading, values], index) => {
+        const columnNumber = index + 1;
+        optionsSheet.getCell(1, columnNumber).value = heading;
+        optionsSheet.getCell(1, columnNumber).font = { bold: true };
+        const items = ["Select option", ...values];
+        items.forEach((value, itemIndex) => {
+          optionsSheet.getCell(itemIndex + 2, columnNumber).value = value;
+        });
+        const letter = String.fromCharCode(64 + columnNumber);
+        workbook.definedNames.add(`'Options'!$${letter}$2:$${letter}$${items.length + 1}`, rangeName);
+      });
+
+      const instructions = workbook.addWorksheet("Instructions");
+      instructions.columns = [{ width: 112 }];
+      instructions.addRows([
+        ["Bulk On-Boarding Request Template"],
+        ["Enter one candidate per row in the Onboarding Requests sheet. Do not rename or reorder its columns."],
+        ["Columns marked * are required. Aadhaar, PAN, phone, and email values must be entered as text and must be valid."],
+        ["Choose Designation, Reporting Manager Username, and HRBP Username from the dropdowns. These values are refreshed from the database each time this template is downloaded."],
+        ["The reporting manager and HRBP must match the selected designation's current hierarchy and HRBP mapping. The Validate step checks this before submission."],
+        ["You can submit up to 500 rows in one workbook. Each valid row creates a separate onboarding request."],
+      ]);
+      instructions.getRow(1).font = { bold: true, size: 16, color: { argb: "FF243B73" } };
+      instructions.getColumn(1).alignment = { wrapText: true, vertical: "middle" };
+      instructions.eachRow((row) => { row.height = 32; });
+
+      for (let rowNumber = 2; rowNumber <= 501; rowNumber++) {
+        for (const columnNumber of [8, 9, 10]) {
+          const rangeName = columnNumber === 8 ? "DesignationOptions" : columnNumber === 9 ? "ReportingManagerOptions" : "HrbpOptions";
+          worksheet.getCell(rowNumber, columnNumber).dataValidation = {
+            type: "list",
+            allowBlank: true,
+            formulae: [`=${rangeName}`],
+            showErrorMessage: true,
+            errorTitle: "Choose a current option",
+            error: "Select a value from the dropdown list.",
+          };
+        }
+        for (const columnNumber of [3, 4, 5, 6, 7]) {
+          worksheet.getCell(rowNumber, columnNumber).numFmt = "@";
+        }
+        if (rowNumber % 2 === 0) {
+          for (let columnNumber = 1; columnNumber <= bulkOnboardingColumns.length; columnNumber++) {
+            worksheet.getCell(rowNumber, columnNumber).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF5F8FF" } };
+          }
+        }
+      }
+
+      const content = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([content as BlobPart], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const downloadUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = downloadUrl;
+      anchor.download = "onboarding-request-template.xlsx";
+      anchor.click();
+      URL.revokeObjectURL(downloadUrl);
+      toast.success("Latest onboarding template downloaded.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to download the onboarding template.");
+    } finally {
+      setIsDownloadingTemplate(false);
+    }
+  }
+
+  async function handleBulkFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
+    setBulkFileName(file?.name ?? "");
+    setBulkRows(null);
+    setBulkValidation(null);
+    setBulkSubmission(null);
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".xlsx")) {
+      toast.error("Upload the downloaded .xlsx onboarding template.");
+      setBulkFileName("");
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error("The workbook must be smaller than 15 MB.");
+      setBulkFileName("");
+      return;
+    }
+
+    setIsReadingBulkFile(true);
+    try {
+      const { Workbook } = await import("exceljs");
+      const workbook = new Workbook();
+      await workbook.xlsx.load(await file.arrayBuffer());
+      const worksheet = workbook.getWorksheet("Onboarding Requests");
+      if (!worksheet) throw new Error("The workbook is missing the Onboarding Requests sheet.");
+
+      const expectedHeaders = bulkOnboardingColumns.map((column) => column.header.replaceAll("*", "").trim().toLowerCase());
+      const actualHeaders = bulkOnboardingColumns.map((_, index) => readExcelCell(worksheet.getCell(1, index + 1).value).replaceAll("*", "").trim().toLowerCase());
+      if (expectedHeaders.some((header, index) => header !== actualHeaders[index])) {
+        throw new Error("The spreadsheet columns do not match the downloaded onboarding template.");
+      }
+
+      if (worksheet.rowCount > 501) throw new Error("A maximum of 500 candidate rows can be uploaded at once.");
+      const rows: OnboardingBulkRow[] = [];
+      for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber++) {
+        const values = bulkOnboardingColumns.map((_, index) => readExcelCell(worksheet.getCell(rowNumber, index + 1).value));
+        if (values.every((value) => !value)) continue;
+        rows.push({
+          rowNumber,
+          firstName: values[0],
+          lastName: values[1],
+          aadhaarCardNumber: values[2],
+          panCardNumber: values[3],
+          personalEmailAddress: values[4],
+          permanentAddress: values[5],
+          phoneNumber: values[6],
+          designationRoleName: values[7],
+          reportingManagerUsername: values[8],
+          hrbpUsername: values[9],
+          educationQualification: values[10],
+          comment: values[11],
+        });
+      }
+      if (rows.length === 0) throw new Error("The workbook has no candidate rows to validate.");
+      setBulkRows(rows);
+      toast.success(`${rows.length} onboarding row${rows.length === 1 ? "" : "s"} ready to validate.`);
+    } catch (error) {
+      setBulkFileName("");
+      toast.error(error instanceof Error ? error.message : "Unable to read the onboarding workbook.");
+    } finally {
+      setIsReadingBulkFile(false);
+    }
+  }
+
+  async function validateBulkFile() {
+    const token = accessToken();
+    if (!token || !bulkRows) return;
+    setIsValidatingBulk(true);
+    setBulkValidation(null);
+    setBulkSubmission(null);
+    try {
+      const result = await validateBulkOnboardingRequests(token, bulkRows);
+      setBulkValidation(result);
+      if (result.valid) toast.success("Validation has been passed!");
+      else toast.error(`Validation has been failed. ${result.errors.length} issue${result.errors.length === 1 ? "" : "s"} found.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to validate the onboarding workbook.");
+    } finally {
+      setIsValidatingBulk(false);
+    }
+  }
+
+  async function submitBulkFile() {
+    const token = accessToken();
+    if (!token || !bulkRows || !bulkValidation?.valid || bulkSubmission?.submitted) return;
+    setIsSubmittingBulk(true);
+    try {
+      const result = await submitBulkOnboardingRequests(token, bulkRows);
+      setBulkSubmission(result);
+      if (result.submitted) {
+        toast.success(`${result.createdRequestIds.length} onboarding request${result.createdRequestIds.length === 1 ? "" : "s"} created.`);
+        setBulkValidation({ valid: true, errors: [] });
+        await loadRequests(0, pageSize);
+      } else {
+        setBulkValidation({ valid: false, errors: result.errors });
+        toast.error("Validation has been failed. Review the row errors before submitting again.");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to submit onboarding requests.");
+    } finally {
+      setIsSubmittingBulk(false);
+    }
+  }
+
   return (
       <>
         <div className="mb-4 flex flex-wrap gap-2 rounded-2xl border border-zinc-200 bg-white p-2 shadow-sm">
@@ -666,6 +917,15 @@ export default function OnboardingPage() {
           >
             Track On-Boarding Request
           </Button>
+          {isSeniorHr ? (
+              <Button
+                  className={activeTab === "bulk" ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-500 hover:to-teal-500" : ""}
+                  onClick={() => setActiveTab("bulk")}
+                  variant={activeTab === "bulk" ? "default" : "ghost"}
+              >
+                <FileSpreadsheet className="mr-2 h-4 w-4" /> Bulk On-Boarding
+              </Button>
+          ) : null}
         </div>
 
         <Card className="mb-6 overflow-hidden border-0 bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 text-white shadow-xl shadow-violet-200/60">
@@ -1021,6 +1281,103 @@ export default function OnboardingPage() {
               </CardContent>
             </Card>
         )}
+
+        {activeTab === "bulk" && isSeniorHr ? (
+            <Card className="mb-6 overflow-hidden border-emerald-100 shadow-md shadow-emerald-100/40">
+              <CardHeader className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 text-white">
+                <CardTitle className="flex items-center gap-2 text-white">
+                  <FileSpreadsheet className="h-5 w-5" /> Bulk On-Boarding Requests
+                </CardTitle>
+                <CardDescription className="text-emerald-50">
+                  Download a fresh template, complete one candidate per row, then validate before submitting. Each row creates a separate request.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6 pt-6">
+                <div className="grid gap-4 rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-end">
+                  <div>
+                    <p className="text-sm font-semibold text-zinc-900">1. Prepare the workbook</p>
+                    <p className="mt-1 text-sm text-zinc-600">
+                      The template includes current designation, reporting manager, and HRBP dropdown values fetched from the database when downloaded.
+                    </p>
+                  </div>
+                  <Button disabled={isDownloadingTemplate} onClick={() => void downloadBulkTemplate()} variant="outline">
+                    {isDownloadingTemplate ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                    {isDownloadingTemplate ? "Preparing template..." : "Download Excel template"}
+                  </Button>
+                  <label className={`inline-flex h-10 cursor-pointer items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-100 ${isReadingBulkFile ? "pointer-events-none opacity-60" : ""}`}>
+                    {isReadingBulkFile ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                    {isReadingBulkFile ? "Reading workbook..." : "Upload completed workbook"}
+                    <input accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="sr-only" disabled={isReadingBulkFile} onChange={(event) => void handleBulkFileChange(event)} type="file" />
+                  </label>
+                  {bulkFileName ? (
+                      <p className="text-xs text-zinc-500 lg:col-span-3">Selected file: <span className="font-medium text-zinc-700">{bulkFileName}</span>{bulkRows ? ` · ${bulkRows.length} candidate row${bulkRows.length === 1 ? "" : "s"}` : ""}</p>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-col gap-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-zinc-900">2. Validate and submit</p>
+                    <p className="mt-1 text-sm text-zinc-600">Validation checks required fields, formats, duplicate values, and each row&apos;s reporting hierarchy and HRBP mapping.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button disabled={!bulkRows || isValidatingBulk || isSubmittingBulk} onClick={() => void validateBulkFile()} variant="outline">
+                      {isValidatingBulk ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                      {isValidatingBulk ? "Validating..." : "Validate workbook"}
+                    </Button>
+                    <Button disabled={!bulkValidation?.valid || isValidatingBulk || isSubmittingBulk || !!bulkSubmission?.submitted} onClick={() => void submitBulkFile()}>
+                      {isSubmittingBulk ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                      {isSubmittingBulk ? "Submitting..." : "Submit all requests"}
+                    </Button>
+                  </div>
+                </div>
+
+                {bulkValidation ? (
+                    <div className={`rounded-2xl border p-4 ${bulkValidation.valid ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50"}`}>
+                      <div className="flex items-center gap-2">
+                        {bulkValidation.valid ? <CheckCircle2 className="h-5 w-5 text-emerald-600" /> : <ShieldX className="h-5 w-5 text-rose-600" />}
+                        <p className={`font-semibold ${bulkValidation.valid ? "text-emerald-800" : "text-rose-800"}`}>
+                          {bulkValidation.valid ? "Validation has been passed!" : "Validation has been failed"}
+                        </p>
+                      </div>
+                      {bulkValidation.valid ? (
+                          <p className="mt-1 text-sm text-emerald-700">All {bulkRows?.length ?? 0} row(s) are valid. You can submit the requests now.</p>
+                      ) : (
+                          <>
+                            <p className="mt-1 text-sm text-rose-700">{bulkValidation.errors.length} issue(s) found. Fix the indicated cells in Excel, upload the corrected workbook, and validate again.</p>
+                            <div className="mt-3 max-h-80 overflow-auto rounded-xl border border-rose-200 bg-white">
+                              <table className="w-full min-w-[620px] text-left text-sm">
+                                <thead className="sticky top-0 bg-rose-100 text-rose-900">
+                                <tr>
+                                  <th className="px-3 py-2 font-semibold">Excel row</th>
+                                  <th className="px-3 py-2 font-semibold">Field</th>
+                                  <th className="px-3 py-2 font-semibold">Issue</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                {bulkValidation.errors.map((error, index) => (
+                                    <tr className="border-t border-zinc-100" key={`${error.rowNumber}-${error.field}-${index}`}>
+                                      <td className="px-3 py-2 font-medium text-zinc-800">{error.rowNumber ?? "Workbook"}</td>
+                                      <td className="px-3 py-2 text-zinc-700">{error.field}</td>
+                                      <td className="px-3 py-2 text-zinc-700">{error.message}</td>
+                                    </tr>
+                                ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </>
+                      )}
+                    </div>
+                ) : null}
+
+                {bulkSubmission?.submitted ? (
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+                      <p className="font-semibold">{bulkSubmission.createdRequestIds.length} separate onboarding request(s) created successfully.</p>
+                      <p className="mt-1">All requests are now available in Track On-Boarding Request.</p>
+                    </div>
+                ) : null}
+              </CardContent>
+            </Card>
+        ) : null}
 
         {viewRequest ? (
             <div

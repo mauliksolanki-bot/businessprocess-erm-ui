@@ -265,6 +265,51 @@ export type OnboardingManagerOptionsResponse = {
   managers: OnboardingManagerOption[];
 };
 
+export type OnboardingBulkRow = {
+  rowNumber: number;
+  firstName: string;
+  lastName: string;
+  aadhaarCardNumber: string;
+  panCardNumber: string;
+  personalEmailAddress: string;
+  permanentAddress: string;
+  phoneNumber: string;
+  designationRoleName: string;
+  reportingManagerUsername: string;
+  hrbpUsername: string;
+  educationQualification: string;
+  comment: string;
+};
+
+export type OnboardingBulkTemplateDesignationOption = {
+  designationRoleName: string;
+  reportingManagerRoleName: string;
+  hrbpRoleName: string;
+  reportingManagerUsernames: string[];
+  hrbpUsernames: string[];
+};
+
+export type OnboardingBulkTemplateOptions = {
+  designations: OnboardingBulkTemplateDesignationOption[];
+};
+
+export type OnboardingBulkValidationError = {
+  rowNumber: number | null;
+  field: string;
+  message: string;
+};
+
+export type OnboardingBulkValidationResponse = {
+  valid: boolean;
+  errors: OnboardingBulkValidationError[];
+};
+
+export type OnboardingBulkSubmitResponse = {
+  submitted: boolean;
+  errors: OnboardingBulkValidationError[];
+  createdRequestIds: number[];
+};
+
 export type ProjectWorkflowStage =
     | "PM Submitted"
     | "Delivery Manager Approved"
@@ -1665,6 +1710,29 @@ export async function getOnboardingDesignationOptions(accessToken: string) {
       Authorization: "Bearer " + accessToken,
     },
     cache: "no-store",
+  });
+}
+
+export async function getOnboardingBulkTemplateOptions(accessToken: string) {
+  return request<OnboardingBulkTemplateOptions>("/api/onboarding-requests/bulk-template-options", {
+    headers: { Authorization: "Bearer " + accessToken },
+    cache: "no-store",
+  });
+}
+
+export async function validateBulkOnboardingRequests(accessToken: string, rows: OnboardingBulkRow[]) {
+  return request<OnboardingBulkValidationResponse>("/api/onboarding-requests/bulk/validate", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + accessToken },
+    body: JSON.stringify({ rows }),
+  });
+}
+
+export async function submitBulkOnboardingRequests(accessToken: string, rows: OnboardingBulkRow[]) {
+  return request<OnboardingBulkSubmitResponse>("/api/onboarding-requests/bulk", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + accessToken },
+    body: JSON.stringify({ rows }),
   });
 }
 
