@@ -790,131 +790,147 @@ function HrOverviewDashboardView({
   error: string | null;
   lastUpdated: string | null;
 }) {
-  const maxDesignationCount = Math.max(1, ...dashboard.designationCounts.map((item) => item.userCount));
-  const maxHrbpCount = Math.max(1, ...dashboard.hrbpEmployeeCounts.map((item) => item.employeeCount));
-  const coverage = dashboard.totalActiveUsers === 0
+  const mappedPercent = dashboard.totalActiveUsers === 0
       ? 0
       : Math.round((dashboard.employeesMappedToHrbp / dashboard.totalActiveUsers) * 100);
+  const averageHrbpLoad = dashboard.hrbpEmployeeCounts.length === 0
+      ? 0
+      : Math.round(dashboard.employeesMappedToHrbp / dashboard.hrbpEmployeeCounts.length);
 
   return (
-    <div className="space-y-6">
-      <Card className="overflow-hidden border-0 bg-gradient-to-r from-slate-900 via-indigo-900 to-violet-800 text-white shadow-xl shadow-indigo-200/50">
-        <CardContent className="flex flex-col gap-6 p-6 lg:flex-row lg:items-center lg:justify-between lg:p-8">
-          <div className="max-w-xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-indigo-200">Leadership overview</p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Workforce at a glance</h1>
-            <p className="mt-2 text-sm leading-6 text-indigo-100">
-              See how active users are distributed across designations and the employees supported by each HRBP.
-            </p>
-          </div>
-          <div className="grid w-full gap-3 sm:grid-cols-3 lg:max-w-2xl">
-            <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-sm">
-              <p className="text-xs font-medium text-indigo-100">Active users</p>
-              <p className="mt-2 text-3xl font-semibold">{dashboard.totalActiveUsers.toLocaleString()}</p>
-            </div>
-            <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-sm">
-              <p className="text-xs font-medium text-indigo-100">Mapped to an HRBP</p>
-              <p className="mt-2 text-3xl font-semibold">{dashboard.employeesMappedToHrbp.toLocaleString()}</p>
-              <p className="mt-1 text-xs text-indigo-200">{coverage}% of active workforce</p>
-            </div>
-            <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-sm">
-              <p className="text-xs font-medium text-indigo-100">Without active HRBP</p>
-              <p className="mt-2 text-3xl font-semibold">{dashboard.employeesWithoutHrbp.toLocaleString()}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-medium text-emerald-700">Live workforce data</span>
-        <span>Refreshes every 15 seconds.</span>
-        {lastUpdated ? <span>Last updated at {lastUpdated}.</span> : null}
-        {error ? <span className="text-rose-600">{error}</span> : null}
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-indigo-600">Leadership report</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-950">Workforce overview</h1>
+          <p className="mt-1 text-sm text-zinc-600">Active users by designation and HRBP assignment.</p>
+        </div>
+        <div className="text-right text-xs text-zinc-500">
+          <p><span className="font-medium text-emerald-700">Live report</span> · refreshes every 15 seconds</p>
+          {lastUpdated ? <p className="mt-1">Updated {lastUpdated}</p> : null}
+          {error ? <p className="mt-1 text-rose-600">{error}</p> : null}
+        </div>
       </div>
 
-      <section className="grid gap-5 xl:grid-cols-2">
-        <Card className="overflow-hidden border-indigo-100 shadow-md shadow-indigo-100/40">
-          <CardHeader className="border-b border-indigo-100 bg-gradient-to-r from-indigo-50 via-white to-blue-50">
-            <CardTitle className="flex items-center gap-2 text-indigo-950">
-              <span className="rounded-xl bg-indigo-600 p-2 text-white"><Users className="h-4 w-4" /></span>
-              Users by designation
-            </CardTitle>
-            <CardDescription>Each active user is counted once under their primary designation.</CardDescription>
+      <section className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+        <div className="rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-white px-3 py-2.5">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-indigo-700">Active users</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums text-indigo-950">{dashboard.totalActiveUsers.toLocaleString()}</p>
+        </div>
+        <div className="rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white px-3 py-2.5">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-700">HRBP mapped</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums text-emerald-950">{dashboard.employeesMappedToHrbp.toLocaleString()} <span className="text-sm font-medium text-emerald-700">{mappedPercent}%</span></p>
+        </div>
+        <div className="rounded-xl border border-amber-100 bg-gradient-to-br from-amber-50 to-white px-3 py-2.5">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-amber-700">Unassigned / inactive HRBP</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums text-amber-950">{dashboard.employeesWithoutHrbp.toLocaleString()}</p>
+        </div>
+        <div className="rounded-xl border border-violet-100 bg-gradient-to-br from-violet-50 to-white px-3 py-2.5">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-violet-700">Active HRBPs · avg. team</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums text-violet-950">{dashboard.hrbpEmployeeCounts.length.toLocaleString()} <span className="text-sm font-medium text-violet-700">· {averageHrbpLoad} / HRBP</span></p>
+        </div>
+      </section>
+
+      <section className="grid items-start gap-4 xl:grid-cols-2">
+        <Card className="overflow-hidden border-indigo-100 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-indigo-100 bg-indigo-50/70 px-4 py-3">
+            <div>
+              <CardTitle className="text-base text-indigo-950">Users by designation</CardTitle>
+              <CardDescription className="mt-0.5 text-xs">One user counted under their primary designation.</CardDescription>
+            </div>
+            <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-indigo-800 ring-1 ring-indigo-100">
+              {dashboard.designationCounts.length} designations
+            </span>
           </CardHeader>
-          <CardContent className="space-y-4 p-5">
-            {dashboard.designationCounts.length === 0 ? (
-                <EmptyState title="No active users" description="There are no active user records to summarize yet." />
-            ) : (
-                dashboard.designationCounts.map((item, index) => (
-                    <div className="space-y-2" key={item.designation}>
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex min-w-0 items-center gap-3">
-                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-xs font-bold text-indigo-700">
-                            {String(index + 1).padStart(2, "0")}
-                          </span>
-                          <span className="truncate text-sm font-medium text-zinc-800">{item.designation}</span>
-                        </div>
-                        <span className="shrink-0 rounded-full bg-indigo-50 px-3 py-1 text-sm font-semibold tabular-nums text-indigo-800">
-                          {item.userCount.toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="ml-11 h-2 overflow-hidden rounded-full bg-zinc-100">
-                        <div
-                            className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-[width]"
-                            style={{ width: (item.userCount / maxDesignationCount * 100) + "%" }}
-                        />
-                      </div>
-                    </div>
-                ))
-            )}
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[390px] text-sm">
+                <thead className="bg-zinc-50 text-left text-[11px] uppercase tracking-wide text-zinc-500">
+                <tr>
+                  <th className="px-4 py-2 font-semibold">Designation</th>
+                  <th className="px-4 py-2 text-right font-semibold">Users</th>
+                  <th className="w-24 px-4 py-2 text-right font-semibold">Share</th>
+                </tr>
+                </thead>
+                <tbody>
+                {dashboard.designationCounts.length === 0 ? (
+                    <tr><td className="px-4 py-5 text-sm text-zinc-500" colSpan={3}>No active users found.</td></tr>
+                ) : dashboard.designationCounts.map((item) => (
+                    <tr className="border-t border-zinc-100 hover:bg-indigo-50/30" key={item.designation}>
+                      <td className="px-4 py-2.5 font-medium text-zinc-800">{item.designation}</td>
+                      <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-zinc-950">{item.userCount.toLocaleString()}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-zinc-600">
+                        {dashboard.totalActiveUsers === 0 ? "0%" : Math.round(item.userCount / dashboard.totalActiveUsers * 100) + "%"}
+                      </td>
+                    </tr>
+                ))}
+                </tbody>
+                <tfoot className="border-t-2 border-indigo-100 bg-indigo-50/60">
+                <tr>
+                  <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-indigo-900">Total active users</th>
+                  <th className="px-4 py-2.5 text-right font-bold tabular-nums text-indigo-950">{dashboard.totalActiveUsers.toLocaleString()}</th>
+                  <th className="px-4 py-2.5 text-right font-semibold tabular-nums text-indigo-800">{dashboard.totalActiveUsers === 0 ? "0%" : "100%"}</th>
+                </tr>
+                </tfoot>
+              </table>
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="overflow-hidden border-emerald-100 shadow-md shadow-emerald-100/40">
-          <CardHeader className="border-b border-emerald-100 bg-gradient-to-r from-emerald-50 via-white to-teal-50">
-            <CardTitle className="flex items-center gap-2 text-emerald-950">
-              <span className="rounded-xl bg-emerald-600 p-2 text-white"><Users className="h-4 w-4" /></span>
-              Employees by HRBP
-            </CardTitle>
-            <CardDescription>Active employees mapped to each active HRBP, ordered by team size.</CardDescription>
+        <Card className="overflow-hidden border-emerald-100 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-emerald-100 bg-emerald-50/70 px-4 py-3">
+            <div>
+              <CardTitle className="text-base text-emerald-950">Employees by HRBP</CardTitle>
+              <CardDescription className="mt-0.5 text-xs">Assigned active employees per active HRBP.</CardDescription>
+            </div>
+            <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-100">
+              {dashboard.employeesMappedToHrbp.toLocaleString()} assigned
+            </span>
           </CardHeader>
-          <CardContent className="space-y-3 p-5">
-            {dashboard.hrbpEmployeeCounts.length === 0 ? (
-                <EmptyState title="No active HRBPs found" description="No active Junior HR, Senior HR, HR Head, or CHRO contacts are available." />
-            ) : (
-                dashboard.hrbpEmployeeCounts.map((item) => (
-                    <div className="rounded-2xl border border-zinc-200 bg-white p-4 transition-colors hover:border-emerald-200 hover:bg-emerald-50/30" key={item.userId}>
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-sm font-bold text-white shadow-sm">
-                          {item.fullName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase()}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate font-semibold text-zinc-900">{item.fullName}</p>
-                          <p className="truncate text-xs text-zinc-500">@{item.username}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-2xl font-semibold tabular-nums text-emerald-800">{item.employeeCount.toLocaleString()}</p>
-                          <p className="text-[11px] text-zinc-500">employees</p>
-                        </div>
-                      </div>
-                      <div className="mt-3 flex items-center justify-between gap-3">
-                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800">{item.designation}</span>
-                        <div className="h-1.5 min-w-20 flex-1 overflow-hidden rounded-full bg-zinc-100">
-                          <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500" style={{ width: (item.employeeCount / maxHrbpCount * 100) + "%" }} />
-                        </div>
-                      </div>
-                    </div>
-                ))
-            )}
-            {dashboard.employeesWithoutHrbp > 0 ? (
-                <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-                  <div>
-                    <p className="text-sm font-semibold text-amber-950">Unassigned / inactive HRBP</p>
-                    <p className="text-xs text-amber-800">Employees needing an active HRBP mapping</p>
-                  </div>
-                  <span className="rounded-full bg-white px-3 py-1 text-sm font-bold tabular-nums text-amber-900">{dashboard.employeesWithoutHrbp.toLocaleString()}</span>
-                </div>
-            ) : null}
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[500px] text-sm">
+                <thead className="bg-zinc-50 text-left text-[11px] uppercase tracking-wide text-zinc-500">
+                <tr>
+                  <th className="px-4 py-2 font-semibold">HRBP</th>
+                  <th className="px-4 py-2 font-semibold">Designation</th>
+                  <th className="px-4 py-2 text-right font-semibold">Employees</th>
+                  <th className="w-20 px-4 py-2 text-right font-semibold">Share</th>
+                </tr>
+                </thead>
+                <tbody>
+                {dashboard.hrbpEmployeeCounts.length === 0 ? (
+                    <tr><td className="px-4 py-5 text-sm text-zinc-500" colSpan={4}>No active HRBP contacts found.</td></tr>
+                ) : dashboard.hrbpEmployeeCounts.map((item) => (
+                    <tr className="border-t border-zinc-100 hover:bg-emerald-50/30" key={item.userId}>
+                      <td className="px-4 py-2.5">
+                        <p className="font-medium text-zinc-900">{item.fullName}</p>
+                        <p className="text-[11px] text-zinc-500">@{item.username}</p>
+                      </td>
+                      <td className="px-4 py-2.5 text-zinc-600">{item.designation}</td>
+                      <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-emerald-900">{item.employeeCount.toLocaleString()}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-zinc-600">
+                        {dashboard.employeesMappedToHrbp === 0 ? "0%" : Math.round(item.employeeCount / dashboard.employeesMappedToHrbp * 100) + "%"}
+                      </td>
+                    </tr>
+                ))}
+                </tbody>
+                <tfoot className="border-t-2 border-emerald-100 bg-emerald-50/60">
+                <tr>
+                  <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-emerald-900" colSpan={2}>Mapped total</th>
+                  <th className="px-4 py-2.5 text-right font-bold tabular-nums text-emerald-950">{dashboard.employeesMappedToHrbp.toLocaleString()}</th>
+                  <th className="px-4 py-2.5 text-right font-semibold tabular-nums text-emerald-800">{dashboard.employeesMappedToHrbp === 0 ? "0%" : "100%"}</th>
+                </tr>
+                <tr className="border-t border-emerald-100 bg-amber-50/70">
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-amber-900" colSpan={2}>Unassigned / inactive HRBP</th>
+                  <th className="px-4 py-2.5 text-right font-semibold tabular-nums text-amber-950">{dashboard.employeesWithoutHrbp.toLocaleString()}</th>
+                  <th className="px-4 py-2.5 text-right tabular-nums text-amber-800">
+                    {dashboard.totalActiveUsers === 0 ? "0%" : Math.round(dashboard.employeesWithoutHrbp / dashboard.totalActiveUsers * 100) + "%"}
+                  </th>
+                </tr>
+                </tfoot>
+              </table>
+            </div>
           </CardContent>
         </Card>
       </section>
