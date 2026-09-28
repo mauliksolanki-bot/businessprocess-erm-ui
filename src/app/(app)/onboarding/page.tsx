@@ -928,37 +928,39 @@ export default function OnboardingPage() {
           ) : null}
         </div>
 
-        <Card className="mb-6 overflow-hidden border-0 bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 text-white shadow-xl shadow-violet-200/60">
-          <CardContent className="flex min-h-[152px] flex-col justify-center gap-3 p-6 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-white/70">On-Boarding</p>
-              <h1 className="mt-1 text-2xl font-semibold">{headerTitle}</h1>
-              <p className="mt-1 text-sm text-white/80">{headerDescription}</p>
-            </div>
-            {activeTab === "tracker" ? (
-                <div className="grid w-full gap-3 sm:grid-cols-3 md:max-w-[430px]">
-                  <SummaryPill
-                      label="Total requests"
-                      value={hasLoaded ? requests.length : 0}
-                      isActive={trackerStatusFilter === "all"}
-                      onClick={() => onSummaryFilterClick("all")}
-                  />
-                  <SummaryPill
-                      label="Pending"
-                      value={hasLoaded ? requestSummary.pendingCount : 0}
-                      isActive={trackerStatusFilter === "pending"}
-                      onClick={() => onSummaryFilterClick("pending")}
-                  />
-                  <SummaryPill
-                      label="Closed"
-                      value={hasLoaded ? requestSummary.closedCount : 0}
-                      isActive={trackerStatusFilter === "closed"}
-                      onClick={() => onSummaryFilterClick("closed")}
-                  />
+        {activeTab !== "bulk" ? (
+            <Card className="mb-6 overflow-hidden border-0 bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 text-white shadow-xl shadow-violet-200/60">
+              <CardContent className="flex min-h-[152px] flex-col justify-center gap-3 p-6 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-[0.35em] text-white/70">On-Boarding</p>
+                  <h1 className="mt-1 text-2xl font-semibold">{headerTitle}</h1>
+                  <p className="mt-1 text-sm text-white/80">{headerDescription}</p>
                 </div>
-            ) : null}
-          </CardContent>
-        </Card>
+                {activeTab === "tracker" ? (
+                    <div className="grid w-full gap-3 sm:grid-cols-3 md:max-w-[430px]">
+                      <SummaryPill
+                          label="Total requests"
+                          value={hasLoaded ? requests.length : 0}
+                          isActive={trackerStatusFilter === "all"}
+                          onClick={() => onSummaryFilterClick("all")}
+                      />
+                      <SummaryPill
+                          label="Pending"
+                          value={hasLoaded ? requestSummary.pendingCount : 0}
+                          isActive={trackerStatusFilter === "pending"}
+                          onClick={() => onSummaryFilterClick("pending")}
+                      />
+                      <SummaryPill
+                          label="Closed"
+                          value={hasLoaded ? requestSummary.closedCount : 0}
+                          isActive={trackerStatusFilter === "closed"}
+                          onClick={() => onSummaryFilterClick("closed")}
+                      />
+                    </div>
+                ) : null}
+              </CardContent>
+            </Card>
+        ) : null}
 
         {activeTab === "raise" && canCreate ? (
             <Card className="overflow-hidden border-blue-100 shadow-md shadow-blue-100/40">
