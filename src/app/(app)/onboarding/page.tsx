@@ -714,21 +714,57 @@ export default function OnboardingPage() {
       const optionsSheet = workbook.addWorksheet("Options");
       optionsSheet.state = "veryHidden";
       const uniqueSorted = (values: string[]) => [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
-      const optionLists = [
-        ["DesignationOptions", "Designation", uniqueSorted(templateOptions.designations.map((option) => option.designationRoleName))],
-        ["ReportingManagerOptions", "Reporting Managers", uniqueSorted(templateOptions.designations.flatMap((option) => option.reportingManagerUsernames))],
-        ["HrbpOptions", "HRBP Contacts", uniqueSorted(templateOptions.designations.flatMap((option) => option.hrbpUsernames))],
-      ] as const;
-      optionLists.forEach(([rangeName, heading, values], index) => {
-        const columnNumber = index + 1;
-        optionsSheet.getCell(1, columnNumber).value = heading;
-        optionsSheet.getCell(1, columnNumber).font = { bold: true };
-        const items = ["Select option", ...values];
-        items.forEach((value, itemIndex) => {
-          optionsSheet.getCell(itemIndex + 2, columnNumber).value = value;
+      const excelColumnLetter = (columnNumber: number) => {
+        let current = columnNumber;
+        let letter = "";
+        while (current > 0) {
+          const remainder = (current - 1) % 26;
+          letter = String.fromCharCode(65 + remainder) + letter;
+          current = Math.floor((current - 1) / 26);
+        }
+        return letter;
+      };
+      const designationOptions = [...new Map(
+        templateOptions.designations.map((option) => [option.designationRoleName, option] as const),
+      ).values()]
+          .sort((a, b) => a.designationRoleName.localeCompare(b.designationRoleName));
+      optionsSheet.getCell("A1").value = "Designation";
+      optionsSheet.getCell("A1").font = { bold: true };
+      const designationItems = ["Select option", ...uniqueSorted(designationOptions.map((option) => option.designationRoleName))];
+      designationItems.forEach((value, index) => {
+        optionsSheet.getCell(index + 2, 1).value = value;
+      });
+      workbook.definedNames.add("'Options'!$A$2:$A$" + (designationItems.length + 1), "DesignationOptions");
+
+      // Keep an empty fallback list so dependent dropdowns stay empty until a designation is selected.
+      optionsSheet.getCell("B1").value = "Empty options";
+      optionsSheet.getCell("B1").font = { bold: true };
+      optionsSheet.getCell("B2").value = "";
+      workbook.definedNames.add("'Options'!$B$2", "EmptyOptions");
+
+      designationOptions.forEach((option, index) => {
+        const designationIndex = index + 2; // "Select option" is the first item in DesignationOptions.
+        const managerColumn = 3 + index * 2;
+        const hrbpColumn = managerColumn + 1;
+        const managerLetter = excelColumnLetter(managerColumn);
+        const hrbpLetter = excelColumnLetter(hrbpColumn);
+        const managerRangeName = "ReportingManager_" + designationIndex;
+        const hrbpRangeName = "Hrbp_" + designationIndex;
+        const managerItems = ["Select option", ...uniqueSorted(option.reportingManagerUsernames)];
+        const hrbpItems = ["Select option", ...uniqueSorted(option.hrbpUsernames)];
+
+        optionsSheet.getCell(1, managerColumn).value = option.designationRoleName + " Reporting Managers";
+        optionsSheet.getCell(1, hrbpColumn).value = option.designationRoleName + " HRBP";
+        optionsSheet.getCell(1, managerColumn).font = { bold: true };
+        optionsSheet.getCell(1, hrbpColumn).font = { bold: true };
+        managerItems.forEach((value, itemIndex) => {
+          optionsSheet.getCell(itemIndex + 2, managerColumn).value = value;
         });
-        const letter = String.fromCharCode(64 + columnNumber);
-        workbook.definedNames.add(`'Options'!$${letter}$2:$${letter}$${items.length + 1}`, rangeName);
+        hrbpItems.forEach((value, itemIndex) => {
+          optionsSheet.getCell(itemIndex + 2, hrbpColumn).value = value;
+        });
+        workbook.definedNames.add("'Options'!$" + managerLetter + "$2:$" + managerLetter + "$" + (managerItems.length + 1), managerRangeName);
+        workbook.definedNames.add("'Options'!$" + hrbpLetter + "$2:$" + hrbpLetter + "$" + (hrbpItems.length + 1), hrbpRangeName);
       });
 
       const instructions = workbook.addWorksheet("Instructions");
@@ -737,7 +773,7 @@ export default function OnboardingPage() {
         ["Bulk On-Boarding Request Template"],
         ["Enter one candidate per row in the Onboarding Requests sheet. Do not rename or reorder its columns."],
         ["Columns marked * are required. Aadhaar, PAN, phone, and email values must be entered as text and must be valid."],
-        ["Choose Designation, Reporting Manager Username, and HRBP Username from the dropdowns. These values are refreshed from the database each time this template is downloaded."],
+        ["Choose Designation first. The Reporting Manager Username and HRBP Username dropdowns then show only options valid for that designation. These values are refreshed from the database each time this template is downloaded."],
         ["The reporting manager and HRBP must match the selected designation's current hierarchy and HRBP mapping. The Validate step checks this before submission."],
         ["You can submit up to 500 rows in one workbook. Each valid row creates a separate onboarding request."],
       ]);
@@ -747,14 +783,21 @@ export default function OnboardingPage() {
 
       for (let rowNumber = 2; rowNumber <= 501; rowNumber++) {
         for (const columnNumber of [8, 9, 10]) {
-          const rangeName = columnNumber === 8 ? "DesignationOptions" : columnNumber === 9 ? "ReportingManagerOptions" : "HrbpOptions";
+          const rangeFormula = columnNumber === 8
+              ? "=DesignationOptions"
+              : columnNumber === 9
+                  ? '=INDIRECT(IFERROR("ReportingManager_"&MATCH($H' + rowNumber + ',DesignationOptions,0),"EmptyOptions"))'
+                  : '=INDIRECT(IFERROR("Hrbp_"&MATCH($H' + rowNumber + ',DesignationOptions,0),"EmptyOptions"))';
           worksheet.getCell(rowNumber, columnNumber).dataValidation = {
             type: "list",
             allowBlank: true,
-            formulae: [`=${rangeName}`],
+            formulae: [rangeFormula],
             showErrorMessage: true,
             errorTitle: "Choose a current option",
             error: "Select a value from the dropdown list.",
+            showInputMessage: columnNumber !== 8,
+            promptTitle: "Select designation first",
+            prompt: "This list contains options for the designation in column H.",
           };
         }
         for (const columnNumber of [3, 4, 5, 6, 7]) {
