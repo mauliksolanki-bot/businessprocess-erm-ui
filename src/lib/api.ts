@@ -570,6 +570,23 @@ export type DashboardSummary = {
   openEmployeeDataRequests: number;
 };
 
+export type HrOverviewDashboard = {
+  totalActiveUsers: number;
+  employeesMappedToHrbp: number;
+  employeesWithoutHrbp: number;
+  designationCounts: Array<{
+    designation: string;
+    userCount: number;
+  }>;
+  hrbpEmployeeCounts: Array<{
+    userId: number;
+    fullName: string;
+    username: string;
+    designation: string;
+    employeeCount: number;
+  }>;
+};
+
 export type TeamLeadLeaveSummary = {
   leaveRequestId: number;
   employeeUserId: number;
@@ -986,6 +1003,14 @@ export async function getDashboardSummary(accessToken: string) {
       Authorization: "Bearer " + accessToken,
     },
     cache: "no-store",
+  });
+}
+
+export async function getHrOverviewDashboard(accessToken: string) {
+  return request<HrOverviewDashboard>("/api/dashboard/hr-overview", {
+    headers: {
+      Authorization: "Bearer " + accessToken,
+    },
   });
 }
 

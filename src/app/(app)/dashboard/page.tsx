@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import {
   ApiError,
   getDashboardSummary,
+  getHrOverviewDashboard,
   getManagedProjects,
   getProjectMasterProjects,
   getProjectAllocationPendingApprovals,
@@ -17,6 +18,7 @@ import {
   getSelfDashboard,
   getTeamLeadDashboard,
   type DashboardSummary,
+  type HrOverviewDashboard,
   type ManagedProject,
   type ProjectAllocation,
   type ProjectChangeRequest,
@@ -33,6 +35,8 @@ const REFRESH_INTERVAL_MS = 15000;
 const AUTHORIZED_DASHBOARD_ROLES = [
   "super admin",
   "admin",
+  "ceo",
+  "role_ceo",
   "chro",
   "hr head",
   "senior hr",
@@ -54,6 +58,7 @@ const AUTHORIZED_DASHBOARD_ROLES = [
   "role_employee",
   "role_super_admin",
   "role_admin",
+  "role_hr_head",
 ];
 const TEAM_LEAD_ROLES = ["team lead", "role_team_lead", "it support lead", "role_it_support_lead"];
 const PROJECT_MANAGER_ROLES = ["project manager", "role_project_manager"];
@@ -62,6 +67,7 @@ const PROJECT_OWNER_ROLES = ["project owner", "role_project_owner"];
 const DIRECTOR_ROLES = ["director", "role_director"];
 const CTO_ROLES = ["cto", "role_cto"];
 const SUPER_ADMIN_ROLES = ["super admin", "admin", "role_super_admin", "role_admin"];
+const HR_OVERVIEW_ROLES = ["super admin", "role_super_admin", "admin", "role_admin", "ceo", "role_ceo", "hr head", "role_hr_head"];
 
 type ProjectRoleDashboardData = {
   projectRequests: ProjectRequest[];
@@ -775,8 +781,150 @@ function GenericDashboardView({
   );
 }
 
+function HrOverviewDashboardView({
+  dashboard,
+  error,
+  lastUpdated,
+}: {
+  dashboard: HrOverviewDashboard;
+  error: string | null;
+  lastUpdated: string | null;
+}) {
+  const maxDesignationCount = Math.max(1, ...dashboard.designationCounts.map((item) => item.userCount));
+  const maxHrbpCount = Math.max(1, ...dashboard.hrbpEmployeeCounts.map((item) => item.employeeCount));
+  const coverage = dashboard.totalActiveUsers === 0
+      ? 0
+      : Math.round((dashboard.employeesMappedToHrbp / dashboard.totalActiveUsers) * 100);
+
+  return (
+    <div className="space-y-6">
+      <Card className="overflow-hidden border-0 bg-gradient-to-r from-slate-900 via-indigo-900 to-violet-800 text-white shadow-xl shadow-indigo-200/50">
+        <CardContent className="flex flex-col gap-6 p-6 lg:flex-row lg:items-center lg:justify-between lg:p-8">
+          <div className="max-w-xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-indigo-200">Leadership overview</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Workforce at a glance</h1>
+            <p className="mt-2 text-sm leading-6 text-indigo-100">
+              See how active users are distributed across designations and the employees supported by each HRBP.
+            </p>
+          </div>
+          <div className="grid w-full gap-3 sm:grid-cols-3 lg:max-w-2xl">
+            <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-sm">
+              <p className="text-xs font-medium text-indigo-100">Active users</p>
+              <p className="mt-2 text-3xl font-semibold">{dashboard.totalActiveUsers.toLocaleString()}</p>
+            </div>
+            <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-sm">
+              <p className="text-xs font-medium text-indigo-100">Mapped to an HRBP</p>
+              <p className="mt-2 text-3xl font-semibold">{dashboard.employeesMappedToHrbp.toLocaleString()}</p>
+              <p className="mt-1 text-xs text-indigo-200">{coverage}% of active workforce</p>
+            </div>
+            <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-sm">
+              <p className="text-xs font-medium text-indigo-100">Without active HRBP</p>
+              <p className="mt-2 text-3xl font-semibold">{dashboard.employeesWithoutHrbp.toLocaleString()}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-medium text-emerald-700">Live workforce data</span>
+        <span>Refreshes every 15 seconds.</span>
+        {lastUpdated ? <span>Last updated at {lastUpdated}.</span> : null}
+        {error ? <span className="text-rose-600">{error}</span> : null}
+      </div>
+
+      <section className="grid gap-5 xl:grid-cols-2">
+        <Card className="overflow-hidden border-indigo-100 shadow-md shadow-indigo-100/40">
+          <CardHeader className="border-b border-indigo-100 bg-gradient-to-r from-indigo-50 via-white to-blue-50">
+            <CardTitle className="flex items-center gap-2 text-indigo-950">
+              <span className="rounded-xl bg-indigo-600 p-2 text-white"><Users className="h-4 w-4" /></span>
+              Users by designation
+            </CardTitle>
+            <CardDescription>Each active user is counted once under their primary designation.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 p-5">
+            {dashboard.designationCounts.length === 0 ? (
+                <EmptyState title="No active users" description="There are no active user records to summarize yet." />
+            ) : (
+                dashboard.designationCounts.map((item, index) => (
+                    <div className="space-y-2" key={item.designation}>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-xs font-bold text-indigo-700">
+                            {String(index + 1).padStart(2, "0")}
+                          </span>
+                          <span className="truncate text-sm font-medium text-zinc-800">{item.designation}</span>
+                        </div>
+                        <span className="shrink-0 rounded-full bg-indigo-50 px-3 py-1 text-sm font-semibold tabular-nums text-indigo-800">
+                          {item.userCount.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="ml-11 h-2 overflow-hidden rounded-full bg-zinc-100">
+                        <div
+                            className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-[width]"
+                            style={{ width: (item.userCount / maxDesignationCount * 100) + "%" }}
+                        />
+                      </div>
+                    </div>
+                ))
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="overflow-hidden border-emerald-100 shadow-md shadow-emerald-100/40">
+          <CardHeader className="border-b border-emerald-100 bg-gradient-to-r from-emerald-50 via-white to-teal-50">
+            <CardTitle className="flex items-center gap-2 text-emerald-950">
+              <span className="rounded-xl bg-emerald-600 p-2 text-white"><Users className="h-4 w-4" /></span>
+              Employees by HRBP
+            </CardTitle>
+            <CardDescription>Active employees mapped to each active HRBP, ordered by team size.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 p-5">
+            {dashboard.hrbpEmployeeCounts.length === 0 ? (
+                <EmptyState title="No active HRBPs found" description="No active Junior HR, Senior HR, HR Head, or CHRO contacts are available." />
+            ) : (
+                dashboard.hrbpEmployeeCounts.map((item) => (
+                    <div className="rounded-2xl border border-zinc-200 bg-white p-4 transition-colors hover:border-emerald-200 hover:bg-emerald-50/30" key={item.userId}>
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-sm font-bold text-white shadow-sm">
+                          {item.fullName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-semibold text-zinc-900">{item.fullName}</p>
+                          <p className="truncate text-xs text-zinc-500">@{item.username}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-2xl font-semibold tabular-nums text-emerald-800">{item.employeeCount.toLocaleString()}</p>
+                          <p className="text-[11px] text-zinc-500">employees</p>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex items-center justify-between gap-3">
+                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800">{item.designation}</span>
+                        <div className="h-1.5 min-w-20 flex-1 overflow-hidden rounded-full bg-zinc-100">
+                          <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500" style={{ width: (item.employeeCount / maxHrbpCount * 100) + "%" }} />
+                        </div>
+                      </div>
+                    </div>
+                ))
+            )}
+            {dashboard.employeesWithoutHrbp > 0 ? (
+                <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-semibold text-amber-950">Unassigned / inactive HRBP</p>
+                    <p className="text-xs text-amber-800">Employees needing an active HRBP mapping</p>
+                  </div>
+                  <span className="rounded-full bg-white px-3 py-1 text-sm font-bold tabular-nums text-amber-900">{dashboard.employeesWithoutHrbp.toLocaleString()}</span>
+                </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      </section>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [hrOverviewDashboard, setHrOverviewDashboard] = useState<HrOverviewDashboard | null>(null);
   const [teamLeadDashboard, setTeamLeadDashboard] = useState<TeamLeadDashboard | null>(null);
   const [projectRoleDashboard, setProjectRoleDashboard] = useState<ProjectRoleDashboardData | null>(null);
   const [selfDashboard, setSelfDashboard] = useState<SelfDashboard | null>(null);
@@ -790,6 +938,7 @@ export default function DashboardPage() {
   const [isDirectorFocusView, setIsDirectorFocusView] = useState(false);
   const [isProjectOwnerFocusView, setIsProjectOwnerFocusView] = useState(false);
   const [isProjectRoleView, setIsProjectRoleView] = useState(false);
+  const [isHrOverviewView, setIsHrOverviewView] = useState(false);
   const [activeRoleNames, setActiveRoleNames] = useState<string[]>([]);
   const [activeUsername, setActiveUsername] = useState("");
 
@@ -814,6 +963,7 @@ export default function DashboardPage() {
     setIsAuthorized(true);
 
     const teamLeadAllowed = roleNames.some((role) => TEAM_LEAD_ROLES.includes(role));
+    const hrOverviewAllowed = roleNames.some((role) => HR_OVERVIEW_ROLES.includes(role));
     const isEmployeeSelfRole = roleNames.includes("employee") || roleNames.includes("application support specialist");
     const isDirectorRole = roleNames.some((role) => DIRECTOR_ROLES.includes(role));
     const isProjectOwnerRole = roleNames.some((role) => PROJECT_OWNER_ROLES.includes(role));
@@ -828,13 +978,22 @@ export default function DashboardPage() {
         SUPER_ADMIN_ROLES.includes(role)
     );
     setIsTeamLeadView(teamLeadAllowed);
+    setIsHrOverviewView(hrOverviewAllowed);
     setIsSelfDashboardView(isEmployeeSelfRole);
     setIsDirectorFocusView(isDirectorRole && !teamLeadAllowed && !isGlobalRole);
     setIsProjectOwnerFocusView(isProjectOwnerRole && !teamLeadAllowed && !isDirectorRole && !isGlobalRole);
     setIsProjectRoleView(projectRoleAllowed && !isEmployeeSelfRole && !isDirectorRole && !isProjectOwnerRole);
 
     try {
-      if (teamLeadAllowed) {
+      if (hrOverviewAllowed) {
+        const data = await getHrOverviewDashboard(session.accessToken);
+        setHrOverviewDashboard(data);
+        setSummary(null);
+        setTeamLeadDashboard(null);
+        setSelfDashboard(null);
+        setFocusDashboard(null);
+        setProjectRoleDashboard(null);
+      } else if (teamLeadAllowed) {
         const data = await getTeamLeadDashboard(session.accessToken);
         setTeamLeadDashboard(data);
         setSummary(null);
@@ -958,6 +1117,23 @@ export default function DashboardPage() {
         </CardHeader>
       </Card>
     );
+  }
+
+  if (isHrOverviewView) {
+    if (isLoading && !hrOverviewDashboard) {
+      return <ProjectRoleDashboardSkeleton />;
+    }
+    if (!hrOverviewDashboard) {
+      return (
+        <Card className="border-rose-100 shadow-md shadow-rose-100/40">
+          <CardHeader className="bg-gradient-to-r from-rose-500 to-red-500 text-white">
+            <CardTitle className="text-white">Unable to load workforce overview</CardTitle>
+            <CardDescription className="text-rose-50">{error ?? "Please refresh the page and try again."}</CardDescription>
+          </CardHeader>
+        </Card>
+      );
+    }
+    return <HrOverviewDashboardView dashboard={hrOverviewDashboard} error={error} lastUpdated={lastUpdated} />;
   }
 
   if (isTeamLeadView) {
