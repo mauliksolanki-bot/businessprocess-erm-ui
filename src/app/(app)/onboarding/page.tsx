@@ -40,7 +40,7 @@ import { loadSession } from "@/lib/auth-storage";
 
 const ADDITIONAL_APPROVER_DESIGNATIONS: OnboardingAdditionalApproverDesignation[] = ["Super Admin", "CHRO", "CEO", "CTO"];
 const MAX_BULK_ONBOARDING_ROWS = 10000;
-const BULK_ONBOARDING_BATCH_SIZE = 100;
+const BULK_ONBOARDING_BATCH_SIZE = 20;
 
 function additionalApproverRoleName(designation: OnboardingAdditionalApproverDesignation) {
   return designation.toLowerCase();
