@@ -1803,6 +1803,24 @@ export async function takeOnboardingAction(
   });
 }
 
+export async function takeBulkOnboardingAction(
+    accessToken: string,
+    payload: {
+      requestIds: number[];
+      decision: "APPROVE" | "REJECT" | "REFER_BACK";
+      comment: string;
+      additionalApproverDesignation?: OnboardingAdditionalApproverDesignation | null;
+    }
+) {
+  return request<OnboardingRequest[]>("/api/onboarding-requests/bulk-actions", {
+    method: "PATCH",
+    headers: {
+      Authorization: "Bearer " + accessToken,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function addOnboardingRequestComment(accessToken: string, requestId: number, payload: RequestComment) {
   return request<OnboardingRequest>(`/api/onboarding-requests/${requestId}/comments`, {
     method: "POST",

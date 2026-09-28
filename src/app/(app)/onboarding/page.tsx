@@ -24,6 +24,7 @@ import {
   sendOnboardingReminder,
   searchUserMentions,
   submitBulkOnboardingRequests,
+  takeBulkOnboardingAction,
   takeOnboardingAction,
   validateBulkOnboardingRequests,
   ONBOARDING_CLOSED_STAGES,
@@ -200,6 +201,11 @@ export default function OnboardingPage() {
   const [actionComment, setActionComment] = useState("");
   const [additionalApproverChoice, setAdditionalApproverChoice] = useState<"" | "NONE" | OnboardingAdditionalApproverDesignation>("");
   const [isActioning, setIsActioning] = useState(false);
+  const [selectedOnboardingIds, setSelectedOnboardingIds] = useState<Set<number>>(() => new Set());
+  const [bulkActionType, setBulkActionType] = useState<"APPROVE" | "REJECT" | "REFER_BACK" | null>(null);
+  const [bulkActionComment, setBulkActionComment] = useState("");
+  const [bulkAdditionalApproverChoice, setBulkAdditionalApproverChoice] = useState<"" | "NONE" | OnboardingAdditionalApproverDesignation>("");
+  const [isBulkActioning, setIsBulkActioning] = useState(false);
   const [isCommenting, setIsCommenting] = useState(false);
   const [isReInitiating, setIsReInitiating] = useState<number | null>(null);
   const [isSendingReminder, setIsSendingReminder] = useState<number | null>(null);
@@ -480,6 +486,106 @@ export default function OnboardingPage() {
     return false;
   }
 
+  const actionableRequests = filteredRequests.filter(canAction);
+  const selectedActionableRequests = actionableRequests.filter((request) => selectedOnboardingIds.has(request.id));
+  const allActionableRequestsSelected = actionableRequests.length > 0 &&
+      actionableRequests.every((request) => selectedOnboardingIds.has(request.id));
+  const bulkRequiresAdditionalApproverChoice =
+      bulkActionType === "APPROVE" &&
+      canAdminApprove &&
+      selectedActionableRequests.some((request) => request.workflowStage === "Head HR Approved");
+
+  function toggleOnboardingRequestSelection(requestId: number, checked: boolean) {
+    setSelectedOnboardingIds((current) => {
+      const next = new Set(current);
+      if (checked) {
+        if (next.size >= 500) {
+          toast.error("You can action up to 500 onboarding requests at a time.");
+          return current;
+        }
+        next.add(requestId);
+      } else {
+        next.delete(requestId);
+      }
+      return next;
+    });
+  }
+
+  function toggleAllActionableRequests(checked: boolean) {
+    setSelectedOnboardingIds((current) => {
+      const next = new Set(current);
+      if (checked) {
+        for (const request of actionableRequests) {
+          if (!next.has(request.id) && next.size >= 500) {
+            toast.error("You can action up to 500 onboarding requests at a time.");
+            break;
+          }
+          next.add(request.id);
+        }
+      } else {
+        for (const request of actionableRequests) {
+          next.delete(request.id);
+        }
+      }
+      return next;
+    });
+  }
+
+  function openBulkAction(decision: "APPROVE" | "REJECT" | "REFER_BACK") {
+    setBulkActionComment("");
+    setBulkAdditionalApproverChoice("");
+    setBulkActionType(decision);
+  }
+
+  async function submitBulkAction() {
+    const requestIds = selectedActionableRequests.map((request) => request.id);
+    const token = accessToken();
+    if (!token || requestIds.length === 0 || !bulkActionType) {
+      return;
+    }
+    if (!bulkActionComment.trim()) {
+      toast.error("A comment is required for the bulk action.");
+      return;
+    }
+    if (bulkActionComment.trim().length > 500) {
+      toast.error("Comment cannot be more than 500 characters.");
+      return;
+    }
+    if (bulkRequiresAdditionalApproverChoice && !bulkAdditionalApproverChoice) {
+      toast.error("Choose whether to finalize these requests or route them for additional approval.");
+      return;
+    }
+
+    setIsBulkActioning(true);
+    try {
+      await takeBulkOnboardingAction(token, {
+        requestIds,
+        decision: bulkActionType,
+        comment: bulkActionComment.trim(),
+        additionalApproverDesignation:
+            bulkRequiresAdditionalApproverChoice && bulkAdditionalApproverChoice !== "NONE" && bulkAdditionalApproverChoice !== ""
+                ? bulkAdditionalApproverChoice
+                : null,
+      });
+      toast.success(requestIds.length + " onboarding request" + (requestIds.length === 1 ? "" : "s") + " updated.");
+      setSelectedOnboardingIds(new Set());
+      setBulkActionType(null);
+      await loadRequests();
+    } catch (error) {
+      if (error instanceof ApiError) {
+        toast.error(error.status === 403
+            ? "You are not authorized to action one or more selected requests."
+            : error.status === 400
+                ? "One or more selected requests are no longer actionable. Refresh the list and try again."
+                : "Bulk action failed (" + error.status + ").");
+      } else {
+        toast.error("Unable to complete the bulk action.");
+      }
+    } finally {
+      setIsBulkActioning(false);
+    }
+  }
+
   function canReInitiate(request: OnboardingRequest) {
     return canCreate && request.workflowStage === "Rejected" && request.createdByUsername.toLowerCase() === username;
   }
@@ -677,6 +783,7 @@ export default function OnboardingPage() {
   }
 
   function onSummaryFilterClick(filter: TrackerStatusFilter) {
+    setSelectedOnboardingIds(new Set());
     setTrackerStatusFilter(filter);
     setActiveTab("tracker");
     if (!hasLoaded) {
@@ -714,21 +821,57 @@ export default function OnboardingPage() {
       const optionsSheet = workbook.addWorksheet("Options");
       optionsSheet.state = "veryHidden";
       const uniqueSorted = (values: string[]) => [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
-      const optionLists = [
-        ["DesignationOptions", "Designation", uniqueSorted(templateOptions.designations.map((option) => option.designationRoleName))],
-        ["ReportingManagerOptions", "Reporting Managers", uniqueSorted(templateOptions.designations.flatMap((option) => option.reportingManagerUsernames))],
-        ["HrbpOptions", "HRBP Contacts", uniqueSorted(templateOptions.designations.flatMap((option) => option.hrbpUsernames))],
-      ] as const;
-      optionLists.forEach(([rangeName, heading, values], index) => {
-        const columnNumber = index + 1;
-        optionsSheet.getCell(1, columnNumber).value = heading;
-        optionsSheet.getCell(1, columnNumber).font = { bold: true };
-        const items = ["Select option", ...values];
-        items.forEach((value, itemIndex) => {
-          optionsSheet.getCell(itemIndex + 2, columnNumber).value = value;
+      const excelColumnLetter = (columnNumber: number) => {
+        let current = columnNumber;
+        let letter = "";
+        while (current > 0) {
+          const remainder = (current - 1) % 26;
+          letter = String.fromCharCode(65 + remainder) + letter;
+          current = Math.floor((current - 1) / 26);
+        }
+        return letter;
+      };
+      const designationOptions = [...new Map(
+        templateOptions.designations.map((option) => [option.designationRoleName, option] as const),
+      ).values()]
+          .sort((a, b) => a.designationRoleName.localeCompare(b.designationRoleName));
+      optionsSheet.getCell("A1").value = "Designation";
+      optionsSheet.getCell("A1").font = { bold: true };
+      const designationItems = ["Select option", ...uniqueSorted(designationOptions.map((option) => option.designationRoleName))];
+      designationItems.forEach((value, index) => {
+        optionsSheet.getCell(index + 2, 1).value = value;
+      });
+      workbook.definedNames.add("'Options'!$A$2:$A$" + (designationItems.length + 1), "DesignationOptions");
+
+      // Keep an empty fallback list so dependent dropdowns stay empty until a designation is selected.
+      optionsSheet.getCell("B1").value = "Empty options";
+      optionsSheet.getCell("B1").font = { bold: true };
+      optionsSheet.getCell("B2").value = "";
+      workbook.definedNames.add("'Options'!$B$2", "EmptyOptions");
+
+      designationOptions.forEach((option, index) => {
+        const designationIndex = index + 2; // "Select option" is the first item in DesignationOptions.
+        const managerColumn = 3 + index * 2;
+        const hrbpColumn = managerColumn + 1;
+        const managerLetter = excelColumnLetter(managerColumn);
+        const hrbpLetter = excelColumnLetter(hrbpColumn);
+        const managerRangeName = "ReportingManager_" + designationIndex;
+        const hrbpRangeName = "Hrbp_" + designationIndex;
+        const managerItems = ["Select option", ...uniqueSorted(option.reportingManagerUsernames)];
+        const hrbpItems = ["Select option", ...uniqueSorted(option.hrbpUsernames)];
+
+        optionsSheet.getCell(1, managerColumn).value = option.designationRoleName + " Reporting Managers";
+        optionsSheet.getCell(1, hrbpColumn).value = option.designationRoleName + " HRBP";
+        optionsSheet.getCell(1, managerColumn).font = { bold: true };
+        optionsSheet.getCell(1, hrbpColumn).font = { bold: true };
+        managerItems.forEach((value, itemIndex) => {
+          optionsSheet.getCell(itemIndex + 2, managerColumn).value = value;
         });
-        const letter = String.fromCharCode(64 + columnNumber);
-        workbook.definedNames.add(`'Options'!$${letter}$2:$${letter}$${items.length + 1}`, rangeName);
+        hrbpItems.forEach((value, itemIndex) => {
+          optionsSheet.getCell(itemIndex + 2, hrbpColumn).value = value;
+        });
+        workbook.definedNames.add("'Options'!$" + managerLetter + "$2:$" + managerLetter + "$" + (managerItems.length + 1), managerRangeName);
+        workbook.definedNames.add("'Options'!$" + hrbpLetter + "$2:$" + hrbpLetter + "$" + (hrbpItems.length + 1), hrbpRangeName);
       });
 
       const instructions = workbook.addWorksheet("Instructions");
@@ -737,7 +880,7 @@ export default function OnboardingPage() {
         ["Bulk On-Boarding Request Template"],
         ["Enter one candidate per row in the Onboarding Requests sheet. Do not rename or reorder its columns."],
         ["Columns marked * are required. Aadhaar, PAN, phone, and email values must be entered as text and must be valid."],
-        ["Choose Designation, Reporting Manager Username, and HRBP Username from the dropdowns. These values are refreshed from the database each time this template is downloaded."],
+        ["Choose Designation first. The Reporting Manager Username and HRBP Username dropdowns then show only options valid for that designation. These values are refreshed from the database each time this template is downloaded."],
         ["The reporting manager and HRBP must match the selected designation's current hierarchy and HRBP mapping. The Validate step checks this before submission."],
         ["You can submit up to 500 rows in one workbook. Each valid row creates a separate onboarding request."],
       ]);
@@ -747,14 +890,21 @@ export default function OnboardingPage() {
 
       for (let rowNumber = 2; rowNumber <= 501; rowNumber++) {
         for (const columnNumber of [8, 9, 10]) {
-          const rangeName = columnNumber === 8 ? "DesignationOptions" : columnNumber === 9 ? "ReportingManagerOptions" : "HrbpOptions";
+          const rangeFormula = columnNumber === 8
+              ? "=DesignationOptions"
+              : columnNumber === 9
+                  ? '=INDIRECT(IFERROR("ReportingManager_"&MATCH($H' + rowNumber + ',DesignationOptions,0),"EmptyOptions"))'
+                  : '=INDIRECT(IFERROR("Hrbp_"&MATCH($H' + rowNumber + ',DesignationOptions,0),"EmptyOptions"))';
           worksheet.getCell(rowNumber, columnNumber).dataValidation = {
             type: "list",
             allowBlank: true,
-            formulae: [`=${rangeName}`],
+            formulae: [rangeFormula],
             showErrorMessage: true,
             errorTitle: "Choose a current option",
             error: "Select a value from the dropdown list.",
+            showInputMessage: columnNumber !== 8,
+            promptTitle: "Select designation first",
+            prompt: "This list contains options for the designation in column H.",
           };
         }
         for (const columnNumber of [3, 4, 5, 6, 7]) {
@@ -1103,10 +1253,41 @@ export default function OnboardingPage() {
                     </div>
                 ) : (
                     <>
+                      {actionableRequests.length > 0 ? (
+                          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-indigo-100 bg-indigo-50/70 px-4 py-3">
+                            <span className="mr-auto text-sm font-medium text-indigo-950">
+                              {selectedActionableRequests.length} selected
+                              <span className="ml-2 text-xs font-normal text-indigo-700">Select requests on this page to action them together.</span>
+                            </span>
+                            {selectedActionableRequests.length > 0 ? (
+                                <>
+                                  <Button className="gap-2 bg-emerald-600 text-white hover:bg-emerald-500" onClick={() => openBulkAction("APPROVE")} size="sm">
+                                    <CheckCircle2 className="h-4 w-4" /> Approve
+                                  </Button>
+                                  <Button className="gap-2 border-violet-200 bg-white text-violet-700 hover:bg-violet-100" onClick={() => openBulkAction("REFER_BACK")} size="sm" variant="outline">
+                                    <CornerUpLeft className="h-4 w-4" /> Refer back
+                                  </Button>
+                                  <Button className="gap-2 border-rose-200 bg-white text-rose-700 hover:bg-rose-100" onClick={() => openBulkAction("REJECT")} size="sm" variant="outline">
+                                    <ShieldX className="h-4 w-4" /> Reject
+                                  </Button>
+                                </>
+                            ) : null}
+                          </div>
+                      ) : null}
                       <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white">
-                        <table className="w-full min-w-[980px] text-sm">
+                        <table className="w-full min-w-[1020px] text-sm">
                           <thead className="bg-gradient-to-r from-indigo-50 via-violet-50 to-cyan-50 text-left text-zinc-800">
                           <tr>
+                            <th className="w-10 px-4 py-3">
+                              <input
+                                  aria-label="Select all actionable onboarding requests on this page"
+                                  checked={allActionableRequestsSelected}
+                                  className="h-4 w-4 accent-indigo-600"
+                                  disabled={actionableRequests.length === 0}
+                                  onChange={(event) => toggleAllActionableRequests(event.currentTarget.checked)}
+                                  type="checkbox"
+                              />
+                            </th>
                             <th className="px-4 py-3 font-medium">Candidate</th>
                             <th className="px-4 py-3 font-medium">Requester</th>
                             <th className="px-4 py-3 font-medium">IDs</th>
@@ -1119,6 +1300,17 @@ export default function OnboardingPage() {
                           <tbody>
                           {filteredRequests.map((request) => (
                               <tr className="border-t border-zinc-200 hover:bg-indigo-50/30" key={request.id}>
+                                <td className="px-4 py-3 align-top">
+                                  {canAction(request) ? (
+                                      <input
+                                          aria-label={"Select onboarding request " + request.id}
+                                          checked={selectedOnboardingIds.has(request.id)}
+                                          className="mt-1 h-4 w-4 accent-indigo-600"
+                                          onChange={(event) => toggleOnboardingRequestSelection(request.id, event.currentTarget.checked)}
+                                          type="checkbox"
+                                      />
+                                  ) : null}
+                                </td>
                                 <td className="px-4 py-3">
                                   <p className="font-semibold text-zinc-900">
                                     {request.firstName} {request.lastName}
@@ -1268,10 +1460,12 @@ export default function OnboardingPage() {
                               totalElements={totalElements}
                               totalPages={totalPages}
                               onPageChange={(p) => {
+                                setSelectedOnboardingIds(new Set());
                                 setIsLoading(true);
                                 void loadRequests(p, pageSize);
                               }}
                               onSizeChange={(s) => {
+                                setSelectedOnboardingIds(new Set());
                                 setIsLoading(true);
                                 setPage(0);
                                 void loadRequests(0, s);
@@ -1551,6 +1745,100 @@ export default function OnboardingPage() {
                   <Button className="gap-2" disabled={isActioning} onClick={() => void submitAction()}>
                     {isActioning ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                     {actionType === "APPROVE" ? "Approve" : actionType === "REJECT" ? "Reject" : "Refer Back"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+        ) : null}
+
+        {bulkActionType ? (
+            <div
+                className="fixed inset-0 z-50 flex items-stretch justify-end bg-slate-950/45 backdrop-blur-sm"
+                onClick={(event) => {
+                  if (event.target === event.currentTarget && !isBulkActioning) {
+                    setBulkActionType(null);
+                  }
+                }}
+            >
+              <div className="ml-auto flex h-full w-full max-w-2xl flex-col overflow-hidden border-l border-white/50 bg-white shadow-2xl shadow-slate-300/40">
+                <div className="border-b border-zinc-200 bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 px-6 py-5 text-white">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-xl font-semibold">
+                        {bulkActionType === "APPROVE" ? "Approve requests" : bulkActionType === "REJECT" ? "Reject requests" : "Refer requests back"}
+                      </h3>
+                      <p className="mt-1 text-sm text-indigo-100">
+                        This action will apply to {selectedActionableRequests.length} selected onboarding request{selectedActionableRequests.length === 1 ? "" : "s"}.
+                      </p>
+                    </div>
+                    <Button
+                        className="border-white/30 bg-white/10 text-white hover:bg-white/20"
+                        disabled={isBulkActioning}
+                        onClick={() => setBulkActionType(null)}
+                        variant="outline"
+                    >
+                      Close
+                    </Button>
+                  </div>
+                </div>
+                <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
+                  {bulkRequiresAdditionalApproverChoice ? (
+                      <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
+                        <p className="text-sm font-semibold text-indigo-900">Additional approval for Admin-approved requests</p>
+                        <p className="mt-1 text-xs text-indigo-700">
+                          Choose whether to finalize selected requests at the Admin step or route them for another approval.
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Button
+                              className={bulkAdditionalApproverChoice === "NONE" ? "rounded-full" : "rounded-full bg-white text-indigo-700"}
+                              onClick={() => setBulkAdditionalApproverChoice("NONE")}
+                              size="sm"
+                              type="button"
+                              variant={bulkAdditionalApproverChoice === "NONE" ? "default" : "outline"}
+                          >
+                            No, finalize now
+                          </Button>
+                          {ADDITIONAL_APPROVER_DESIGNATIONS.map((designation) => (
+                              <Button
+                                  className={bulkAdditionalApproverChoice === designation ? "rounded-full" : "rounded-full bg-white text-indigo-700"}
+                                  key={designation}
+                                  onClick={() => setBulkAdditionalApproverChoice(designation)}
+                                  size="sm"
+                                  type="button"
+                                  variant={bulkAdditionalApproverChoice === designation ? "default" : "outline"}
+                              >
+                                {designation}
+                              </Button>
+                          ))}
+                        </div>
+                      </div>
+                  ) : null}
+                  <MentionTextareaField
+                      className="min-h-35"
+                      label={bulkActionType === "REFER_BACK" ? "Clarification / Change Comment * (applies to all selected requests)" : "Comment * (applies to all selected requests)"}
+                      mentionSearch={mentionSearch}
+                      onChange={setBulkActionComment}
+                      value={bulkActionComment}
+                  />
+                  <p className="text-right text-xs text-zinc-500">{bulkActionComment.length}/500 characters</p>
+                </div>
+                <div className="flex items-center justify-end gap-2 border-t border-zinc-200 px-6 py-4">
+                  <Button disabled={isBulkActioning} onClick={() => setBulkActionType(null)} variant="outline">
+                    Cancel
+                  </Button>
+                  <Button
+                      className="gap-2"
+                      disabled={isBulkActioning || selectedActionableRequests.length === 0}
+                      onClick={() => void submitBulkAction()}
+                  >
+                    {isBulkActioning ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    {isBulkActioning
+                        ? "Applying..."
+                        : bulkActionType === "APPROVE"
+                            ? "Approve selected"
+                            : bulkActionType === "REJECT"
+                                ? "Reject selected"
+                                : "Refer back selected"}
                   </Button>
                 </div>
               </div>
